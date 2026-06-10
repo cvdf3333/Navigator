@@ -1,0 +1,6 @@
+.venv/
+.idea/
+__pycache__/
+invest-nav-frontend/node_modules/
+invest-nav-frontend/dist/
+*.pyc
