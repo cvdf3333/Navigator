@@ -2,7 +2,7 @@
 // 로컬 개발: /api (vite proxy)
 // 시연 환경: /cau19/py
 const IS_DEV = import.meta.env.DEV;
-const BASE = IS_DEV ? "/api" : "/cau19/py";
+const BASE = IS_DEV ? "/api" : "/api";
 
 export async function fetchWithFallback<T>(
   url: string,
