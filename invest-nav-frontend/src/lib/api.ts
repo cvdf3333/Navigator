@@ -9,14 +9,19 @@ const BASE = "/api";
 export async function fetchWithFallback<T>(
   url: string,
   options: RequestInit,
-  fallback: T
+  fallback: T,
+  timeoutMs: number = 15000
 ): Promise<T> {
   try {
     const fullUrl = url.startsWith("http") ? url : `${BASE}${url}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(fullUrl, {
       ...options,
       headers: { "Content-Type": "application/json", ...options.headers },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return await res.json();
   } catch (error) {

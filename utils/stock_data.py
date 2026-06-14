@@ -2,6 +2,7 @@
 yfinance 기반 주가 데이터 수집 모듈
 """
 import yfinance as yf
+import functools
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
@@ -2886,9 +2887,12 @@ _MACRO_FALLBACK = {
 
 
 def _fetch_one_macro(name: str, sym: str) -> tuple[str, dict]:
-    """단일 종목 거시경제 데이터 조회 (개별 실패 허용)"""
+    """단일 종목 거시경제 데이터 조회 (개별 실패 허용, 타임아웃 적용)"""
     try:
-        ticker = yf.Ticker(sym)
+        import requests
+        session = requests.Session()
+        session.request = functools.partial(session.request, timeout=3)
+        ticker = yf.Ticker(sym, session=session)
         hist   = ticker.history(period="5d")
 
         if hist.empty:

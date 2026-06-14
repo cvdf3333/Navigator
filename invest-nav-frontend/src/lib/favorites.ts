@@ -9,7 +9,10 @@ export interface FavoriteStock {
 const KEY = "invest_nav_favorites";
 
 export function getFavorites(): FavoriteStock[] {
+  // 로그인 안 된 게스트는 항상 빈 목록
   try {
+    const token = localStorage.getItem("invest_nav_token");
+    if (!token) return [];
     return JSON.parse(localStorage.getItem(KEY) || "[]");
   } catch { return []; }
 }
