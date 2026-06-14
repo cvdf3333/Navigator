@@ -208,3 +208,38 @@ def macro_analysis():
     }
 
     return jsonify({"ok": True, "data": result})
+
+@macro_bp.get("/debug")
+def macro_debug():
+    """각 심볼별 yfinance 성공/실패 진단"""
+    import time
+
+    symbols = {
+        "KOSPI (^KS11)":     "^KS11",
+        "KOSDAQ (^KQ11)":    "^KQ11",
+        "S&P500 (^GSPC)":    "^GSPC",
+        "NASDAQ (^IXIC)":    "^IXIC",
+        "USDKRW (KRW=X)":    "KRW=X",
+        "DXY (DX-Y.NYB)":    "DX-Y.NYB",
+        "US10Y (^TNX)":      "^TNX",
+        "GOLD (GC=F)":       "GC=F",
+        "WTI (CL=F)":        "CL=F",
+        "삼성전자 (005930.KS)": "005930.KS",
+        "AAPL":              "AAPL",
+    }
+
+    results = {}
+    for name, sym in symbols.items():
+        start = time.time()
+        try:
+            hist = yf.Ticker(sym).history(period="5d")
+            elapsed = round(time.time() - start, 2)
+            if hist.empty:
+                results[name] = {"status": "empty", "elapsed_sec": elapsed}
+            else:
+                results[name] = {"status": "ok", "rows": len(hist), "elapsed_sec": elapsed}
+        except Exception as e:
+            elapsed = round(time.time() - start, 2)
+            results[name] = {"status": "error", "error": str(e)[:200], "elapsed_sec": elapsed}
+
+    return jsonify({"ok": True, "results": results})

@@ -228,6 +228,8 @@ function ProfilePanel({ onClose }: { onClose: () => void }) {
 
   const handleLogout = () => {
     clearAuth();
+    // 로그아웃 시 즐겨찾기 목록도 초기화 (서버 DB에는 그대로 유지됨)
+    localStorage.removeItem("invest_nav_favorites");
     window.location.reload();
   };
 
