@@ -261,7 +261,7 @@ function NewsList({ items }: { items: NewsItem[] }) {
                 <span className="text-xs text-slate-600">{(item.published ?? item.date ?? "")}</span>
                 <ScoreBar score={(item.sentimentScore ?? (item.sentimentScore ?? item.sentiment_score ?? 0) ?? 0)} />
               </div>
-              {(item.sentimentReason ?? item.reason) && !(item.sentimentReason ?? item.reason).includes("KNU") && (
+              {(() => { const r = item.sentimentReason ?? item.reason; return r && !r.includes("KNU"); })() && (
                 <p className="text-xs text-slate-500 mt-1">💡 {(item.sentimentReason ?? item.reason)}</p>
               )}
             </div>
