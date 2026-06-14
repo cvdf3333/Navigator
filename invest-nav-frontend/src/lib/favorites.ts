@@ -19,11 +19,20 @@ export function addFavorite(stock: Omit<FavoriteStock, "addedAt">) {
   if (favs.find(f => f.symbol === stock.symbol)) return;
   favs.push({ ...stock, addedAt: new Date().toISOString() });
   localStorage.setItem(KEY, JSON.stringify(favs));
+  _syncToServer(favs);
 }
 
 export function removeFavorite(symbol: string) {
   const favs = getFavorites().filter(f => f.symbol !== symbol);
   localStorage.setItem(KEY, JSON.stringify(favs));
+  _syncToServer(favs);
+}
+
+// 로그인된 경우 서버에 동기화 (비동기, 실패해도 무시)
+function _syncToServer(favs: FavoriteStock[]) {
+  import("./auth").then(({ syncFavorites }) => {
+    syncFavorites(favs).catch(() => {});
+  });
 }
 
 export function isFavorite(symbol: string): boolean {

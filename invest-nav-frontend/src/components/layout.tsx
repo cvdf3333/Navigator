@@ -7,6 +7,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { GLOSSARY } from "@/lib/glossary";
 import { getFavorites, addFavorite, removeFavorite, isFavorite, type FavoriteStock } from "@/lib/favorites";
+import { getAuth, setAuth, clearAuth, setNickname, login, register, updateNickname, fetchServerFavorites, syncFavorites, type AuthUser } from "@/lib/auth";
 import { fetchWithFallback } from "@/lib/api";
 import { POPULAR_STOCKS } from "@/lib/stocks";
 
@@ -217,20 +218,77 @@ function ProfilePanel({ onClose }: { onClose: () => void }) {
     setFavs(getFavorites());
   };
 
+  const auth = getAuth();
+  const displayName = auth?.nickname || "게스트";
+  const initial = displayName.charAt(0);
+
+  const [editingNick, setEditingNick] = useState(false);
+  const [nickInput, setNickInput]     = useState(displayName);
+  const [nickError, setNickError]     = useState("");
+
+  const handleLogout = () => {
+    clearAuth();
+    window.location.reload();
+  };
+
+  const saveNickname = async () => {
+    const trimmed = nickInput.trim();
+    if (!trimmed) { setNickError("닉네임을 입력해주세요"); return; }
+    if (trimmed.length > 12) { setNickError("12자 이하로 입력해주세요"); return; }
+
+    const res = await updateNickname(trimmed);
+    if (res?.ok) {
+      setNickname(trimmed);
+      setEditingNick(false);
+      setNickError("");
+      window.location.reload();
+    } else {
+      setNickError(res?.error || "변경 실패");
+    }
+  };
+
   return (
     <div className="absolute left-0 bottom-14 w-96 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
       {/* 프로필 헤더 */}
       <div className="px-4 py-4 border-b border-slate-800 bg-gradient-to-r from-blue-600/20 to-purple-600/20">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">김</div>
-          <div>
-            <div className="text-sm font-bold text-white">김투자 님</div>
-            <div className="text-xs text-slate-400">Premium Plan</div>
+          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">{initial}</div>
+          <div className="flex-1 min-w-0">
+            {editingNick ? (
+              <div className="space-y-1">
+                <input value={nickInput} onChange={e => setNickInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && saveNickname()}
+                  maxLength={12} autoFocus
+                  className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-blue-500" />
+                {nickError && <p className="text-[10px] text-rose-400">{nickError}</p>}
+                <div className="flex gap-1">
+                  <button onClick={saveNickname} className="text-[10px] text-blue-400 hover:text-blue-300">저장</button>
+                  <button onClick={() => { setEditingNick(false); setNickInput(displayName); setNickError(""); }} className="text-[10px] text-slate-500 hover:text-slate-400">취소</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <div className="text-sm font-bold text-white truncate">{displayName} 님</div>
+                {auth && (
+                  <button onClick={() => setEditingNick(true)} title="닉네임 변경"
+                    className="text-slate-500 hover:text-slate-300 transition-colors">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="text-xs text-slate-400">{auth ? `@${auth.username}` : "게스트 모드"}</div>
           </div>
-          <button onClick={onClose} className="ml-auto">
+          <button onClick={onClose} className="ml-auto self-start">
             <X className="w-4 h-4 text-slate-500" />
           </button>
         </div>
+        {auth && (
+          <button onClick={handleLogout}
+            className="mt-2 text-xs text-slate-400 hover:text-rose-400 transition-colors">
+            로그아웃
+          </button>
+        )}
       </div>
 
       {/* 즐겨찾기 목록 */}
@@ -290,6 +348,102 @@ function ProfilePanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+
+// ── 로그인 / 회원가입 모달 ─────────────────────────────────
+function LoginModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (user: AuthUser) => void }) {
+  const [mode, setMode]       = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [nickname, setNicknameInput] = useState("");
+  const [error, setError]     = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!username.trim() || !password.trim()) {
+      setError("아이디와 비밀번호를 입력해주세요");
+      return;
+    }
+    setLoading(true); setError("");
+    try {
+      const res = mode === "login"
+        ? await login(username.trim(), password.trim())
+        : await register(username.trim(), password.trim(), nickname.trim() || username.trim());
+
+      if (res?.ok) {
+        const { username: u, token, nickname: nick } = res.data;
+        setAuth(u, token, nick);
+
+        // 서버 즐겨찾기 → 로컬에 병합
+        if (mode === "login" && res.data.favorites) {
+          const localKey = "invest_nav_favorites";
+          localStorage.setItem(localKey, JSON.stringify(res.data.favorites));
+        }
+
+        onSuccess({ username: u, nickname: nick || u, token });
+        onClose();
+      } else {
+        setError(res?.error || "오류가 발생했습니다");
+      }
+    } catch {
+      setError("서버 연결 오류");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm mx-4 shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+          <span className="text-sm font-bold text-white">
+            {mode === "login" ? "로그인" : "회원가입"}
+          </span>
+          <button onClick={onClose}><X className="w-4 h-4 text-slate-500" /></button>
+        </div>
+
+        <div className="p-5 space-y-3">
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">아이디</label>
+            <input value={username} onChange={e => setUsername(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && submit()}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
+              placeholder="아이디 입력" />
+          </div>
+          {mode === "register" && (
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">닉네임 (화면에 표시될 이름)</label>
+              <input value={nickname} onChange={e => setNicknameInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && submit()}
+                maxLength={12}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
+                placeholder="닉네임 입력 (비워두면 아이디 사용)" />
+            </div>
+          )}
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">비밀번호</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && submit()}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500"
+              placeholder="비밀번호 입력 (4자 이상)" />
+          </div>
+
+          {error && <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg p-2">{error}</p>}
+
+          <button type="button" onClick={submit} disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-4 py-2.5 transition-colors">
+            {loading ? "처리 중..." : (mode === "login" ? "로그인" : "회원가입")}
+          </button>
+
+          <button type="button" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
+            className="w-full text-xs text-slate-400 hover:text-slate-300 transition-colors">
+            {mode === "login" ? "계정이 없으신가요? 회원가입" : "이미 계정이 있으신가요? 로그인"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 메인 레이아웃 ─────────────────────────────────────────
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location]             = useLocation();
@@ -297,6 +451,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [showNotif, setShowNotif]   = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [favCount, setFavCount]     = useState(getFavorites().length);
+  const [showLogin, setShowLogin]   = useState(false);
+  const [auth, setAuthState]        = useState(getAuth());
   const notifRef = useRef<HTMLDivElement>(null);
 
   // 즐겨찾기 개수 실시간 반영
@@ -326,6 +482,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-background overflow-hidden">
       {/* 검색 모달 */}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
+
+      {/* 로그인 모달 */}
+      {showLogin && (
+        <LoginModal
+          onClose={() => setShowLogin(false)}
+          onSuccess={(user) => setAuthState(user)}
+        />
+      )}
 
       {/* 사이드바 */}
       <aside className="w-44 flex flex-col border-r border-border bg-card shrink-0">
@@ -359,14 +523,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* 프로필 */}
         <div className="px-2 py-3 border-t border-border relative">
-          <button onClick={() => { setShowProfile(!showProfile); setShowNotif(false); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">
-            <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">김</div>
-            <div className="text-left min-w-0">
-              <div className="text-xs font-semibold text-white truncate">김투자 님</div>
-              <div className="text-[10px] text-slate-500">Premium Plan</div>
-            </div>
-          </button>
+          {auth ? (
+            <button onClick={() => { setShowProfile(!showProfile); setShowNotif(false); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">
+              <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                {auth.nickname.charAt(0)}
+              </div>
+              <div className="text-left min-w-0">
+                <div className="text-xs font-semibold text-white truncate">{auth.nickname} 님</div>
+                <div className="text-[10px] text-slate-500">로그인됨</div>
+              </div>
+            </button>
+          ) : (
+            <button onClick={() => setShowLogin(true)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors">
+              <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center text-white text-xs font-bold shrink-0">?</div>
+              <div className="text-left min-w-0">
+                <div className="text-xs font-semibold text-white truncate">로그인 / 회원가입</div>
+                <div className="text-[10px] text-slate-500">게스트 모드</div>
+              </div>
+            </button>
+          )}
           {showProfile && <ProfilePanel onClose={() => setShowProfile(false)} />}
         </div>
       </aside>

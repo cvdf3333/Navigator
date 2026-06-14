@@ -2869,9 +2869,69 @@ def get_historical_data(symbol: str, period: str = "1y") -> Optional[pd.DataFram
         return None
 
 
+# 최근 성공한 거시경제 데이터 캐시 (서버 재시작 전까지 유지)
+_MACRO_CACHE: dict = {}
+_MACRO_CACHE_TIME: float = 0
+_MACRO_FALLBACK = {
+    "KOSPI":        {"symbol": "^KS11",    "value": 2650.0,  "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
+    "KOSDAQ":       {"symbol": "^KQ11",    "value": 850.0,   "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
+    "S&P 500":      {"symbol": "^GSPC",    "value": 5800.0,  "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
+    "NASDAQ":       {"symbol": "^IXIC",    "value": 18500.0, "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
+    "USD/KRW":      {"symbol": "KRW=X",    "value": 1380.0,  "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
+    "DXY":          {"symbol": "DX-Y.NYB", "value": 104.0,   "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
+    "미국 국채 10년물": {"symbol": "^TNX",  "value": 4.3,     "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
+    "금 (Gold)":    {"symbol": "GC=F",     "value": 2650.0,  "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
+    "WTI 원유":     {"symbol": "CL=F",     "value": 70.0,    "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
+}
+
+
+def _fetch_one_macro(name: str, sym: str) -> tuple[str, dict]:
+    """단일 종목 거시경제 데이터 조회 (개별 실패 허용)"""
+    try:
+        ticker = yf.Ticker(sym)
+        hist   = ticker.history(period="5d")
+
+        if hist.empty:
+            return name, None
+
+        close_col = None
+        for col in hist.columns:
+            col_str = col[0] if isinstance(col, tuple) else col
+            if col_str == "Close":
+                close_col = col
+                break
+
+        if close_col is None:
+            return name, None
+
+        close = hist[close_col].dropna()
+        if close.empty:
+            return name, None
+
+        last = float(close.iloc[-1])
+        prev = float(close.iloc[-2]) if len(close) > 1 else last
+        chg      = last - prev
+        chg_pct  = (chg / prev * 100) if prev else 0
+
+        return name, {
+            "symbol":    sym,
+            "value":     round(last, 2),
+            "change":    round(chg, 2),
+            "changePct": round(chg_pct, 2),
+            "grade":     "B",
+            "source":    "Yahoo Finance",
+        }
+    except Exception:
+        return name, None
+
+
 def get_macro_data() -> dict:
-    """거시경제 지표 조회"""
-    results = {}
+    """거시경제 지표 조회 — 병렬 처리 + 타임아웃 + 캐시/폴백"""
+    import time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    global _MACRO_CACHE, _MACRO_CACHE_TIME
+
     macro_symbols = {
         "KOSPI":        "^KS11",
         "KOSDAQ":       "^KQ11",
@@ -2883,50 +2943,42 @@ def get_macro_data() -> dict:
         "금 (Gold)":    "GC=F",
         "WTI 원유":     "CL=F",
     }
-    for name, sym in macro_symbols.items():
-        try:
-            ticker = yf.Ticker(sym)
-            hist   = ticker.history(period="5d")
 
-            if hist.empty:
-                results[name] = {"symbol": sym, "value": None, "grade": "D"}
-                continue
+    results = {}
 
-            # ── MultiIndex 컬럼 대응 ──────────────────────────
-            # yfinance 최신 버전에서 컬럼이 ("Close", "^KS11") 형태로 올 수 있음
-            close_col = None
-            for col in hist.columns:
-                col_str = col[0] if isinstance(col, tuple) else col
-                if col_str == "Close":
-                    close_col = col
-                    break
-
-            if close_col is None:
-                results[name] = {"symbol": sym, "value": None, "grade": "D"}
-                continue
-
-            close = hist[close_col].dropna()
-            if close.empty:
-                results[name] = {"symbol": sym, "value": None, "grade": "D"}
-                continue
-
-            last = float(close.iloc[-1])
-            prev = float(close.iloc[-2]) if len(close) > 1 else last
-            chg      = last - prev
-            chg_pct  = (chg / prev * 100) if prev else 0
-
-            results[name] = {
-                "symbol":    sym,
-                "value":     round(last, 2),
-                "change":    round(chg, 2),
-                "changePct": round(chg_pct, 2),
-                "grade":     "B",
-                "source":    "Yahoo Finance",
+    try:
+        with ThreadPoolExecutor(max_workers=9) as executor:
+            futures = {
+                executor.submit(_fetch_one_macro, name, sym): name
+                for name, sym in macro_symbols.items()
             }
-        except Exception as e:
-            results[name] = {"symbol": sym, "value": None, "grade": "D"}
+            # 전체 8초 안에 끝나는 것만 수집
+            for future in as_completed(futures, timeout=8):
+                try:
+                    name, data = future.result(timeout=1)
+                    if data:
+                        results[name] = data
+                except Exception:
+                    continue
+    except Exception:
+        pass  # 타임아웃 시 지금까지 모은 결과만 사용
+
+    # 누락된 항목은 캐시 → 폴백 순으로 채움
+    for name, sym in macro_symbols.items():
+        if name not in results:
+            if name in _MACRO_CACHE:
+                results[name] = _MACRO_CACHE[name]
+            else:
+                results[name] = _MACRO_FALLBACK[name]
+
+    # 성공한 결과는 캐시에 저장
+    for name, data in results.items():
+        if data.get("source") == "Yahoo Finance":
+            _MACRO_CACHE[name] = data
+    _MACRO_CACHE_TIME = time.time()
 
     return results
+
 
 
 def search_stocks(query: str) -> list[dict]:

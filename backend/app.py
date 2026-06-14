@@ -14,6 +14,7 @@ from routes.news        import news_bp
 from routes.disclosure  import disclosure_bp
 from routes.portfolio   import portfolio_bp
 from routes.memo        import memo_bp
+from routes.auth        import auth_bp
 
 app = Flask(__name__)
 CORS(app)   # Streamlit → Flask 크로스오리진 허용
@@ -24,6 +25,7 @@ app.register_blueprint(news_bp,       url_prefix="/api/news")
 app.register_blueprint(disclosure_bp, url_prefix="/api/disclosure")
 app.register_blueprint(portfolio_bp,  url_prefix="/api/portfolio")
 app.register_blueprint(memo_bp,       url_prefix="/api/memo")
+app.register_blueprint(auth_bp,       url_prefix="/api/auth")
 
 
 @app.get("/api/health")

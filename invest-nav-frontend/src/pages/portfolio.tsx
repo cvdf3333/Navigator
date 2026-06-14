@@ -35,7 +35,8 @@ const SECTOR_COLORS = ["#22c55e","#3b82f6","#f59e0b","#a855f7","#ec4899","#ef444
 
 
 
-// ── 즐겨찾기 추가 컴포넌트 ───────────────────────────────
+
+
 // ── 애니메이션 점 컴포넌트 ───────────────────────────────
 function AnimatedDots() {
   const [dots, setDots] = useState(0);
@@ -45,6 +46,7 @@ function AnimatedDots() {
   }, []);
   return <span className="text-blue-400">{".".repeat(dots)}</span>;
 }
+
 // ── 백테스팅 컴포넌트 ────────────────────────────────────
 function BacktestPanel({ holdings, totalAmt }: {
   holdings: { symbol: string; name: string; market: string; weight: number }[];
@@ -127,7 +129,7 @@ function BacktestPanel({ holdings, totalAmt }: {
         <div className="flex items-end">
           <button type="button" onClick={run} disabled={loading || !holdings.length}
             className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg px-4 py-2 transition-colors">
-            {loading ? "⏳ 분석 중..." : "▶ 백테스트 실행"}
+            {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2 inline" />분석 중...</> : "▶ 백테스트 실행"}
           </button>
         </div>
       </div>
@@ -140,14 +142,9 @@ function BacktestPanel({ holdings, totalAmt }: {
 
       {loading && (
         <div className="text-center py-8 text-slate-400 text-sm">
-          <div className="text-2xl mb-2">⏳</div>
-          {loading && (
-        <div className="text-center py-8 text-slate-400 text-sm">
           <div className="text-2xl mb-2 animate-spin inline-block">⏳</div>
           <p>yfinance로 과거 데이터 수집 중입니다<AnimatedDots /></p>
           <p className="text-xs text-slate-500 mt-1">30초~1분 소요됩니다</p>
-        </div>
-      )}
         </div>
       )}
 
@@ -224,6 +221,7 @@ function BacktestPanel({ holdings, totalAmt }: {
   );
 }
 
+// ── 즐겨찾기 추가 컴포넌트 ───────────────────────────────
 function FavoriteAdder({ holdings }: { holdings: { symbol: string; name: string; market: string; weight: number }[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saved, setSaved]       = useState(false);
@@ -338,7 +336,7 @@ function StockSearchInput({
                 className={`w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-800 transition-colors text-left
                   ${value === s.symbol ? "bg-blue-600/10 text-blue-400" : "text-slate-200"}`}>
                 <span className="font-medium">{s.name}</span>
-                <span className="text-slate-500 font-sans">{s.symbol}</span>
+                <span className="text-slate-500 font-mono">{s.symbol}</span>
               </button>
             ))}
           </div>
@@ -407,7 +405,7 @@ export default function Portfolio() {
               type="number"
               value={totalAmt}
               onChange={e => setTotalAmt(Number(e.target.value))}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-sans text-sm focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
             />
             <p className="text-xs text-slate-500 mt-1">≈ {fmt(totalAmt)}</p>
           </div>
@@ -416,7 +414,7 @@ export default function Portfolio() {
           <div className="bg-card border border-border rounded-xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-300">🎯 구성 종목 & 비중</h3>
-              <span className={`text-xs font-sans font-bold ${Math.abs(totalW - 100) < 0.5 ? "text-emerald-400" : "text-amber-400"}`}>
+              <span className={`text-xs font-mono font-bold ${Math.abs(totalW - 100) < 0.5 ? "text-emerald-400" : "text-amber-400"}`}>
                 합계 {totalW}%
               </span>
             </div>
@@ -437,7 +435,7 @@ export default function Portfolio() {
                   <input
                     type="number" min={0} max={100} value={h.weight}
                     onChange={e => updateWeight(idx, Number(e.target.value))}
-                    className="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-sans text-sm focus:outline-none focus:border-blue-500 text-center"
+                    className="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono text-sm focus:outline-none focus:border-blue-500 text-center"
                   />
                   <span className="text-slate-500 text-xs">%</span>
                   {totalAmt > 0 && (
@@ -488,7 +486,7 @@ export default function Portfolio() {
                     </button>
                   </div>
                   <div className="text-center">
-                    <div className="text-5xl font-black font-sans" style={{ color: scoreColor }}>
+                    <div className="text-5xl font-black font-mono" style={{ color: scoreColor }}>
                       {rr?.score?.toFixed(2)}
                     </div>
                     <div className="text-sm text-slate-400 mt-1">/10점 · {rr?.label_kr}</div>
@@ -504,12 +502,12 @@ export default function Portfolio() {
                   <div className="grid grid-cols-2 gap-2 mt-4">
                     <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 text-center">
                       <div className="text-xs text-slate-400">📈 기대 수익</div>
-                      <div className="text-sm font-bold text-emerald-400 font-sans">+{rr?.reward?.toFixed(1)}%</div>
+                      <div className="text-sm font-bold text-emerald-400 font-mono">+{rr?.reward?.toFixed(1)}%</div>
                       {totalAmt > 0 && <div className="text-[10px] text-slate-500">+{fmt(Math.round(totalAmt * (rr?.reward || 0) / 100))}</div>}
                     </div>
                     <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-2 text-center">
                       <div className="text-xs text-slate-400">📉 예상 손실</div>
-                      <div className="text-sm font-bold text-rose-400 font-sans">-{rr?.risk?.toFixed(1)}%</div>
+                      <div className="text-sm font-bold text-rose-400 font-mono">-{rr?.risk?.toFixed(1)}%</div>
                       {totalAmt > 0 && <div className="text-[10px] text-slate-500">-{fmt(Math.round(totalAmt * (rr?.risk || 0) / 100))}</div>}
                     </div>
                   </div>
@@ -539,7 +537,7 @@ export default function Portfolio() {
                           <div className="w-2 h-2 rounded-full" style={{ background: SECTOR_COLORS[i % SECTOR_COLORS.length] }} />
                           <span className="text-slate-400">{name}</span>
                         </div>
-                        <span className="text-slate-300 font-sans">{String(value)}%</span>
+                        <span className="text-slate-300 font-mono">{String(value)}%</span>
                       </div>
                     ))}
                   </div>
@@ -566,7 +564,7 @@ export default function Portfolio() {
                         return (
                           <div key={key} className="text-center p-2 rounded-lg" style={{ background: `${color}10`, border: `1px solid ${color}25` }}>
                             <div className="text-[10px] text-slate-400">{label}</div>
-                            <div className="text-sm font-bold font-sans" style={{ color }}>{key !== "bear" ? "+" : ""}{s?.return}%</div>
+                            <div className="text-sm font-bold font-mono" style={{ color }}>{key !== "bear" ? "+" : ""}{s?.return}%</div>
                             <div className="text-[10px] text-slate-500">{s?.prob}%</div>
                           </div>
                         );
@@ -586,7 +584,7 @@ export default function Portfolio() {
                     return (
                       <div key={sc.scenario} className="rounded-xl p-4 text-center border" style={{ background: `${color}0D`, borderColor: `${color}33` }}>
                         <div className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color }}>{sc.emoji} {sc.scenario}</div>
-                        <div className="text-2xl font-black font-sans" style={{ color }}>{sc.expectedReturn > 0 ? "+" : ""}{sc.expectedReturn.toFixed(1)}%</div>
+                        <div className="text-2xl font-black font-mono" style={{ color }}>{sc.expectedReturn > 0 ? "+" : ""}{sc.expectedReturn.toFixed(1)}%</div>
                         <div className="text-xs text-slate-500 mt-1">확률 {sc.probability}%</div>
                         {amtV > 0 && <div className="text-xs text-slate-600 mt-0.5">{sc.expectedReturn >= 0 ? "+" : "-"}{fmt(amtV)}</div>}
                         <div className="text-[10px] text-slate-500 mt-2 border-t pt-2" style={{ borderColor: `${color}22` }}>{sc.description}</div>
