@@ -10,24 +10,31 @@ export async function fetchWithFallback<T>(
   url: string,
   options: RequestInit,
   fallback: T,
-  timeoutMs: number = 15000
+  timeoutMs: number = 12000,
+  retries: number = 2
 ): Promise<T> {
-  try {
-    const fullUrl = url.startsWith("http") ? url : `${BASE}${url}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(fullUrl, {
-      ...options,
-      headers: { "Content-Type": "application/json", ...options.headers },
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
-    return await res.json();
-  } catch (error) {
-    console.warn(`API failed for ${url}:`, error);
-    return fallback;
+  const fullUrl = url.startsWith("http") ? url : `${BASE}${url}`;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(fullUrl, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...options.headers },
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      return await res.json();
+    } catch (error) {
+      console.warn(`API failed for ${url} (attempt ${attempt + 1}):`, error);
+      if (attempt === retries) return fallback;
+      await new Promise(r => setTimeout(r, 500)); // 재시도 전 대기
+    }
   }
+  return fallback;
 }
 
 export async function postJSON<T>(url: string, body: unknown, fallback: T): Promise<T> {

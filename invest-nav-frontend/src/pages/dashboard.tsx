@@ -199,19 +199,20 @@ export default function Dashboard() {
 
   const load = async () => {
     setRefreshing(true);
-    // 기본 지표 먼저 로드
+
+    // ① 거시경제 지표를 단독으로 먼저 호출 (서버 동시 연결 제한 회피)
     const mRes = await fetchWithFallback<{ ok: boolean; data: MacroData }>(
       "/macro", {}, { ok: false, data: {} }
     );
     if (mRes.ok) setMacro(mRes.data);
     setLoading(false);
 
-    // 뉴스 병렬 로드
+    // ② 뉴스 로드
     const nRes = await fetchWithFallback<any>("/news/market?limit=4", {}, MOCK_NEWS);
     const newsData = Array.isArray(nRes) ? nRes : (nRes?.data || MOCK_NEWS);
     setNews(newsData);
 
-    // 심화 분석 별도 로드
+    // ③ 심화 분석 로드
     const aRes = await fetchWithFallback<{ ok: boolean; data: any }>(
       "/macro/analysis", {}, { ok: false, data: null }
     );
