@@ -65,7 +65,7 @@ def _pct_return(series: pd.Series) -> float | None:
         return None
     return round((end / start - 1) * 100, 2)
 
-
+@macro_bp.get("")
 @macro_bp.get("/")
 def macro():
     try:
