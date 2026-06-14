@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Trash2, Loader2, Info, Search, X, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,15 @@ const SECTOR_COLORS = ["#22c55e","#3b82f6","#f59e0b","#a855f7","#ec4899","#ef444
 
 
 // ── 즐겨찾기 추가 컴포넌트 ───────────────────────────────
+// ── 애니메이션 점 컴포넌트 ───────────────────────────────
+function AnimatedDots() {
+  const [dots, setDots] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setDots(d => (d + 1) % 4), 400);
+    return () => clearInterval(t);
+  }, []);
+  return <span className="text-blue-400">{".".repeat(dots)}</span>;
+}
 // ── 백테스팅 컴포넌트 ────────────────────────────────────
 function BacktestPanel({ holdings, totalAmt }: {
   holdings: { symbol: string; name: string; market: string; weight: number }[];
@@ -132,7 +141,13 @@ function BacktestPanel({ holdings, totalAmt }: {
       {loading && (
         <div className="text-center py-8 text-slate-400 text-sm">
           <div className="text-2xl mb-2">⏳</div>
-          yfinance로 과거 데이터 수집 중입니다... (30초~1분 소요)
+          {loading && (
+        <div className="text-center py-8 text-slate-400 text-sm">
+          <div className="text-2xl mb-2 animate-spin inline-block">⏳</div>
+          <p>yfinance로 과거 데이터 수집 중입니다<AnimatedDots /></p>
+          <p className="text-xs text-slate-500 mt-1">30초~1분 소요됩니다</p>
+        </div>
+      )}
         </div>
       )}
 
