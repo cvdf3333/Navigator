@@ -261,7 +261,7 @@ export default function Dashboard() {
                     <div className="text-lg font-bold font-mono text-white leading-tight">{fmtPrice(d.value)}</div>
                     <div className={`flex items-center gap-1 mt-1 text-xs font-mono font-semibold ${up ? "text-emerald-400" : "text-rose-400"}`}>
                       {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                      {up ? "+" : ""}{d.changePct?.toFixed(2)}%
+                       {up ? "+" : ""}{d.changePct?.toFixed(2)}%
                     </div>
                   </>
                 )}

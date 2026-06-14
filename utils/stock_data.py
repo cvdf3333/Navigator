@@ -2926,9 +2926,8 @@ def _fetch_one_macro(name: str, sym: str) -> tuple[str, dict]:
 
 
 def get_macro_data() -> dict:
-    """거시경제 지표 조회 — 병렬 처리 + 타임아웃 + 캐시/폴백"""
+    """거시경제 지표 조회 — 순차 처리 + 캐시/폴백"""
     import time
-    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     global _MACRO_CACHE, _MACRO_CACHE_TIME
 
@@ -2946,37 +2945,23 @@ def get_macro_data() -> dict:
 
     results = {}
 
-    try:
-        with ThreadPoolExecutor(max_workers=9) as executor:
-            futures = {
-                executor.submit(_fetch_one_macro, name, sym): name
-                for name, sym in macro_symbols.items()
-            }
-            # 전체 8초 안에 끝나는 것만 수집
-            for future in as_completed(futures, timeout=8):
-                try:
-                    name, data = future.result(timeout=1)
-                    if data:
-                        results[name] = data
-                except Exception:
-                    continue
-    except Exception:
-        pass  # 타임아웃 시 지금까지 모은 결과만 사용
-
-    # 누락된 항목은 캐시 → 폴백 순으로 채움
     for name, sym in macro_symbols.items():
-        if name not in results:
-            if name in _MACRO_CACHE:
-                results[name] = _MACRO_CACHE[name]
-            else:
-                results[name] = _MACRO_FALLBACK[name]
+        try:
+            _, data = _fetch_one_macro(name, sym)
+            if data:
+                results[name] = data
+                _MACRO_CACHE[name] = data
+                continue
+        except Exception:
+            pass
 
-    # 성공한 결과는 캐시에 저장
-    for name, data in results.items():
-        if data.get("source") == "Yahoo Finance":
-            _MACRO_CACHE[name] = data
+        # 실패 시 캐시 → 폴백
+        if name in _MACRO_CACHE:
+            results[name] = _MACRO_CACHE[name]
+        else:
+            results[name] = _MACRO_FALLBACK[name]
+
     _MACRO_CACHE_TIME = time.time()
-
     return results
 
 
