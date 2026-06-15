@@ -10,7 +10,6 @@ import secrets
 import os
 import json
 import shutil
-import subprocess
 import threading
 
 auth_bp = Blueprint("auth", __name__)
@@ -79,36 +78,42 @@ def _get_db():
 
 
 def _git_push_db():
-    """DB 변경사항을 GitHub repo에 자동 커밋/푸시 (영구 저장용, 실패해도 무시)"""
+    """DB 변경사항을 GitHub API로 직접 업로드 (영구 저장용, 실패해도 무시)"""
+    import base64
+    import requests as req
+
     token = os.environ.get("GITHUB_TOKEN", "")
     repo = os.environ.get("GITHUB_REPO", "")
     if not token or not repo:
         return
 
     try:
-        os.makedirs(os.path.dirname(_TRACKED_DB), exist_ok=True)
-        shutil.copy(DB_PATH, _TRACKED_DB)
+        with open(DB_PATH, "rb") as f:
+            content_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-        remote_url = "https://x-access-token:" + token + "@github.com/" + repo + ".git"
+        api_url = "https://api.github.com/repos/" + repo + "/contents/data/users.db"
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Accept": "application/vnd.github+json",
+        }
 
-        subprocess.run(["git", "config", "user.email", "bot@invest-nav.app"], cwd=_REPO_DIR, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "invest-nav-bot"], cwd=_REPO_DIR, capture_output=True)
-        subprocess.run(["git", "add", "data/users.db"], cwd=_REPO_DIR, capture_output=True)
+        # 기존 파일의 sha 확인 (있으면 업데이트, 없으면 생성)
+        get_res = req.get(api_url, headers=headers, timeout=10)
+        sha = get_res.json().get("sha") if get_res.status_code == 200 else None
 
-        commit = subprocess.run(
-            ["git", "commit", "-m", "auto: update users.db"],
-            cwd=_REPO_DIR, capture_output=True, text=True
-        )
-        if "nothing to commit" in (commit.stdout + commit.stderr):
-            return
+        payload = {
+            "message": "auto: update users.db",
+            "content": content_b64,
+            "branch": "main",
+        }
+        if sha:
+            payload["sha"] = sha
 
-        subprocess.run(
-            ["git", "push", remote_url, "HEAD:main"],
-            cwd=_REPO_DIR, capture_output=True, text=True, timeout=15
-        )
+        put_res = req.put(api_url, headers=headers, json=payload, timeout=15)
+        if put_res.status_code not in (200, 201):
+            print("[git_push_db] GitHub API 오류: " + str(put_res.status_code) + " " + put_res.text[:300])
     except Exception as e:
         print("[git_push_db] 오류 (무시됨): " + str(e))
-
 
 def _git_push_db_async():
     threading.Thread(target=_git_push_db, daemon=True).start()
@@ -265,35 +270,44 @@ def debug_path():
 
 @auth_bp.get("/debug-git-push")
 def debug_git_push():
-    """git push 과정을 동기적으로 실행하고 각 단계 결과를 반환 (디버그용)"""
+    """GitHub API push 과정을 동기적으로 실행하고 결과 반환 (디버그용)"""
+    import base64
+    import requests as req
+
     token = os.environ.get("GITHUB_TOKEN", "")
     repo = os.environ.get("GITHUB_REPO", "")
-    steps = {}
 
     if not token or not repo:
         return jsonify({"ok": False, "error": "GITHUB_TOKEN 또는 GITHUB_REPO 미설정"})
 
     try:
-        os.makedirs(os.path.dirname(_TRACKED_DB), exist_ok=True)
-        shutil.copy(DB_PATH, _TRACKED_DB)
-        steps["copy"] = "ok"
+        with open(DB_PATH, "rb") as f:
+            content_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-        remote_url = "https://x-access-token:" + token + "@github.com/" + repo + ".git"
+        api_url = "https://api.github.com/repos/" + repo + "/contents/data/users.db"
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Accept": "application/vnd.github+json",
+        }
 
-        r1 = subprocess.run(["git", "config", "user.email", "bot@invest-nav.app"], cwd=_REPO_DIR, capture_output=True, text=True)
-        r2 = subprocess.run(["git", "config", "user.name", "invest-nav-bot"], cwd=_REPO_DIR, capture_output=True, text=True)
-        steps["config"] = {"email": r1.returncode, "name": r2.returncode}
+        get_res = req.get(api_url, headers=headers, timeout=10)
+        sha = get_res.json().get("sha") if get_res.status_code == 200 else None
 
-        r3 = subprocess.run(["git", "add", "data/users.db"], cwd=_REPO_DIR, capture_output=True, text=True)
-        steps["add"] = {"returncode": r3.returncode, "stdout": r3.stdout, "stderr": r3.stderr}
+        payload = {
+            "message": "auto: update users.db",
+            "content": content_b64,
+            "branch": "main",
+        }
+        if sha:
+            payload["sha"] = sha
 
-        r4 = subprocess.run(["git", "commit", "-m", "auto: update users.db"], cwd=_REPO_DIR, capture_output=True, text=True)
-        steps["commit"] = {"returncode": r4.returncode, "stdout": r4.stdout, "stderr": r4.stderr}
+        put_res = req.put(api_url, headers=headers, json=payload, timeout=15)
 
-        r5 = subprocess.run(["git", "push", remote_url, "HEAD:main"], cwd=_REPO_DIR, capture_output=True, text=True, timeout=20)
-        steps["push"] = {"returncode": r5.returncode, "stdout": r5.stdout, "stderr": r5.stderr[:500]}
-
-        return jsonify({"ok": True, "steps": steps})
+        return jsonify({
+            "ok": put_res.status_code in (200, 201),
+            "get_status": get_res.status_code,
+            "put_status": put_res.status_code,
+            "put_response": put_res.json() if put_res.status_code not in (200, 201) else "success",
+        })
     except Exception as e:
-        steps["error"] = str(e)
-        return jsonify({"ok": False, "steps": steps})
+        return jsonify({"ok": False, "error": str(e)})
