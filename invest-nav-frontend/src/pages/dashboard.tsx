@@ -47,13 +47,14 @@ function LeverageSimulator() {
     return { normal, lev2 };
   })();
 
-  const BAR_W = 36;
-  const BAR_GAP = 6;
-  const PAIR_GAP = 20;
-  const CHART_H = 240;
-  const LABEL_H = 48;
-  const SVG_H = CHART_H + LABEL_H + 20;
-  const PADDING_L = 44;
+  const BAR_W = 50;
+  const BAR_GAP = 8;
+  const PAIR_GAP = 28;
+  const CHART_H = 220;
+  const LABEL_H = 50;   // 상단 "시작" 라벨 여유
+  const BOTTOM_PAD = 55; // 하단 % 텍스트 여유 (레버리지 큰 변동폭 대응)
+  const SVG_H = CHART_H + LABEL_H + BOTTOM_PAD;
+  const PADDING_L = 46;
   const totalPairs = ROUNDS;
   const pairW = BAR_W * 2 + BAR_GAP + PAIR_GAP;
   const SVG_W = PADDING_L + totalPairs * pairW + 40;
@@ -72,7 +73,7 @@ function LeverageSimulator() {
   const renderChart = (data: { up: number; down: number }[], color: string, title: string) => (
     <div className="flex-1 min-w-0">
       <div className="text-xs font-bold text-center mb-2" style={{ color }}>{title}</div>
-      <svg width="100%" viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="overflow-visible w-full">
+      <svg width="100%" viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
         {/* 기준선 */}
         <line x1={PADDING_L} y1={baseY} x2={SVG_W} y2={baseY}
           stroke="#475569" strokeWidth="1" strokeDasharray="4 2" />
@@ -146,7 +147,7 @@ function LeverageSimulator() {
         (시작값 100 기준)
       </p>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-8">
         {renderChart(steps.normal, "#10B981", `일반 주식 (±${CHANGE}%)`)}
         {renderChart(steps.lev2,   "#F59E0B", `2배 레버리지 (±${CHANGE*2}%)`)}
       </div>
