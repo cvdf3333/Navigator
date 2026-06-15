@@ -261,3 +261,39 @@ def debug_path():
         "repo_dir": _REPO_DIR,
         "github_configured": bool(os.environ.get("GITHUB_TOKEN") and os.environ.get("GITHUB_REPO")),
     })
+
+
+@auth_bp.get("/debug-git-push")
+def debug_git_push():
+    """git push 과정을 동기적으로 실행하고 각 단계 결과를 반환 (디버그용)"""
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repo = os.environ.get("GITHUB_REPO", "")
+    steps = {}
+
+    if not token or not repo:
+        return jsonify({"ok": False, "error": "GITHUB_TOKEN 또는 GITHUB_REPO 미설정"})
+
+    try:
+        os.makedirs(os.path.dirname(_TRACKED_DB), exist_ok=True)
+        shutil.copy(DB_PATH, _TRACKED_DB)
+        steps["copy"] = "ok"
+
+        remote_url = "https://x-access-token:" + token + "@github.com/" + repo + ".git"
+
+        r1 = subprocess.run(["git", "config", "user.email", "bot@invest-nav.app"], cwd=_REPO_DIR, capture_output=True, text=True)
+        r2 = subprocess.run(["git", "config", "user.name", "invest-nav-bot"], cwd=_REPO_DIR, capture_output=True, text=True)
+        steps["config"] = {"email": r1.returncode, "name": r2.returncode}
+
+        r3 = subprocess.run(["git", "add", "data/users.db"], cwd=_REPO_DIR, capture_output=True, text=True)
+        steps["add"] = {"returncode": r3.returncode, "stdout": r3.stdout, "stderr": r3.stderr}
+
+        r4 = subprocess.run(["git", "commit", "-m", "auto: update users.db"], cwd=_REPO_DIR, capture_output=True, text=True)
+        steps["commit"] = {"returncode": r4.returncode, "stdout": r4.stdout, "stderr": r4.stderr}
+
+        r5 = subprocess.run(["git", "push", remote_url, "HEAD:main"], cwd=_REPO_DIR, capture_output=True, text=True, timeout=20)
+        steps["push"] = {"returncode": r5.returncode, "stdout": r5.stdout, "stderr": r5.stderr[:500]}
+
+        return jsonify({"ok": True, "steps": steps})
+    except Exception as e:
+        steps["error"] = str(e)
+        return jsonify({"ok": False, "steps": steps})

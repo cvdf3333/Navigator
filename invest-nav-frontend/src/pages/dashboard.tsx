@@ -200,35 +200,23 @@ export default function Dashboard() {
 
   const load = async () => {
     setRefreshing(true);
-
-    // ① 거시경제 지표를 단독으로 먼저 호출 (서버 동시 연결 제한 회피)
+    // 기본 지표 먼저 로드
     const mRes = await fetchWithFallback<{ ok: boolean; data: MacroData }>(
       "/macro", {}, { ok: false, data: {} }
     );
     if (mRes.ok) setMacro(mRes.data);
     setLoading(false);
 
-    // ② 정적 분석 데이터 — yfinance 불필요, 즉시 표시
-    const staticRes = await fetchWithFallback<{ ok: boolean; data: any }>(
-      "/macro/static-analysis", {}, { ok: false, data: null }
-    );
-    if (staticRes.ok && staticRes.data) {
-      setAnalysis((prev: any) => ({ ...(prev || {}), ...staticRes.data }));
-      setLoadingAdv(false); // 정적 데이터만으로도 일단 화면 표시
-    }
-
-    // ③ 뉴스 로드
+    // 뉴스 병렬 로드
     const nRes = await fetchWithFallback<any>("/news/market?limit=4", {}, MOCK_NEWS);
     const newsData = Array.isArray(nRes) ? nRes : (nRes?.data || MOCK_NEWS);
     setNews(newsData);
 
-    // ④ yfinance 기반 심화 분석 — 느릴 수 있으므로 나중에 병합
+    // 심화 분석 별도 로드
     const aRes = await fetchWithFallback<{ ok: boolean; data: any }>(
       "/macro/analysis", {}, { ok: false, data: null }
     );
-    if (aRes.ok && aRes.data) {
-      setAnalysis((prev: any) => ({ ...(prev || {}), ...aRes.data }));
-    }
+    if (aRes.ok && aRes.data) setAnalysis(aRes.data);
     setLoadingAdv(false);
     setRefreshing(false);
   };

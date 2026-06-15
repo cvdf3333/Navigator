@@ -182,15 +182,6 @@ def macro_analysis():
     except Exception as e:
         result["semiconductor_skew"] = {"error": str(e)}
 
-
-    return jsonify({"ok": True, "data": result})
-
-
-@macro_bp.get("/static-analysis")
-def macro_static_analysis():
-    """정적 데이터 (즉시 응답, yfinance 호출 없음)"""
-    result = {}
-
     # ④ 부동산 자금 유입 효과 (정적 데이터)
     result["realestate_effect"] = {
         "description": "부동산 규제 강화 시기와 주식시장 자금 유입 상관관계",
@@ -215,6 +206,5 @@ def macro_static_analysis():
         ],
         "insight": "개인 투자자는 변동성이 크고 장기적으로 기관·외국인 대비 수익률이 낮은 경향이 있습니다.",
     }
-
 
     return jsonify({"ok": True, "data": result})
