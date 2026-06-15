@@ -26,7 +26,7 @@ const INDICATORS = [
 // ── 레버리지 시뮬레이터 컴포넌트 ─────────────────────────
 function LeverageSimulator() {
   const CHANGE = 10;   // 등락률 %
-  const ROUNDS = 5;    // 반복 횟수 (5회)
+  const ROUNDS = 3;    // 반복 횟수 (3회)
   const START  = 100;  // 시작 기준값
 
   // 10회 등락 과정 계산
