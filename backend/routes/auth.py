@@ -1,6 +1,7 @@
 """
 GET/POST /api/auth — 간단한 회원가입/로그인 시스템
 SQLite 기반, 비밀번호는 해시 저장
+DB는 GitHub repo의 data/users.db에 자동 커밋되어 영구 보존됨
 """
 from flask import Blueprint, jsonify, request
 import sqlite3
@@ -8,34 +9,41 @@ import hashlib
 import secrets
 import os
 import json
+import shutil
+import subprocess
+import threading
 
 auth_bp = Blueprint("auth", __name__)
 
-# 영구 저장 시도: repo 상위 디렉토리(/data/tenants/<name>/) 우선 사용
-# 컨테이너 재배포 시 repo/ 안의 파일은 git pull로 덮어써지지만
-# repo 상위 디렉토리는 보존될 가능성이 있음
-_REPO_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_PARENT_DIR = os.path.dirname(_REPO_DIR)
+# ── 경로 설정 ────────────────────────────────────────────
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # backend/
+_REPO_DIR    = os.path.dirname(_BACKEND_DIR)                                 # repo root
 
-_candidates = [
-    os.path.join(_PARENT_DIR, "persistent_data", "users.db"),  # repo 밖 (영구 가능성)
-    os.path.join(_REPO_DIR, "data", "users.db"),                # repo 안 (기존 위치, 폴백)
-]
+# 컨테이너 재배포 시 보존 가능성이 있는 경로 (repo 밖)
+_PERSIST_DB = os.path.join(os.path.dirname(_REPO_DIR), "persistent_data", "users.db")
+# git에 커밋되는 경로 (repo 안, 재배포 시 git pull로 복원됨)
+_TRACKED_DB = os.path.join(_REPO_DIR, "data", "users.db")
 
-DB_PATH = _candidates[0]
+# 실제 작업용 DB 경로: persistent 우선, 실패하면 tracked 사용
+DB_PATH = _PERSIST_DB
 try:
-    os.makedirs(os.path.dirname(_candidates[0]), exist_ok=True)
-    # 쓰기 테스트
-    test_file = os.path.join(os.path.dirname(_candidates[0]), ".write_test")
+    os.makedirs(os.path.dirname(_PERSIST_DB), exist_ok=True)
+    test_file = os.path.join(os.path.dirname(_PERSIST_DB), ".write_test")
     with open(test_file, "w") as f:
         f.write("test")
     os.remove(test_file)
 except Exception:
-    DB_PATH = _candidates[1]
-    os.makedirs(os.path.dirname(_candidates[1]), exist_ok=True)
+    DB_PATH = _TRACKED_DB
+    os.makedirs(os.path.dirname(_TRACKED_DB), exist_ok=True)
 
 
 def _init_db():
+    if DB_PATH == _PERSIST_DB and not os.path.exists(_PERSIST_DB) and os.path.exists(_TRACKED_DB):
+        try:
+            shutil.copy(_TRACKED_DB, _PERSIST_DB)
+        except Exception:
+            pass
+
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
@@ -43,11 +51,16 @@ def _init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            nickname TEXT,
             token TEXT UNIQUE,
             favorites TEXT DEFAULT '[]',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN nickname TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -55,7 +68,7 @@ def _init_db():
 _init_db()
 
 
-def _hash_pw(password: str) -> str:
+def _hash_pw(password):
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
@@ -63,6 +76,42 @@ def _get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _git_push_db():
+    """DB 변경사항을 GitHub repo에 자동 커밋/푸시 (영구 저장용, 실패해도 무시)"""
+    token = os.environ.get("GITHUB_TOKEN", "")
+    repo = os.environ.get("GITHUB_REPO", "")
+    if not token or not repo:
+        return
+
+    try:
+        os.makedirs(os.path.dirname(_TRACKED_DB), exist_ok=True)
+        shutil.copy(DB_PATH, _TRACKED_DB)
+
+        remote_url = "https://x-access-token:" + token + "@github.com/" + repo + ".git"
+
+        subprocess.run(["git", "config", "user.email", "bot@invest-nav.app"], cwd=_REPO_DIR, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "invest-nav-bot"], cwd=_REPO_DIR, capture_output=True)
+        subprocess.run(["git", "add", "data/users.db"], cwd=_REPO_DIR, capture_output=True)
+
+        commit = subprocess.run(
+            ["git", "commit", "-m", "auto: update users.db"],
+            cwd=_REPO_DIR, capture_output=True, text=True
+        )
+        if "nothing to commit" in (commit.stdout + commit.stderr):
+            return
+
+        subprocess.run(
+            ["git", "push", remote_url, "HEAD:main"],
+            cwd=_REPO_DIR, capture_output=True, text=True, timeout=15
+        )
+    except Exception as e:
+        print("[git_push_db] 오류 (무시됨): " + str(e))
+
+
+def _git_push_db_async():
+    threading.Thread(target=_git_push_db, daemon=True).start()
 
 
 @auth_bp.post("/register")
@@ -84,16 +133,18 @@ def register():
         if existing:
             return jsonify({"ok": False, "error": "이미 존재하는 아이디입니다"}), 409
 
+        nickname = (body.get("nickname") or username).strip()
         pw_hash = _hash_pw(password)
-        token   = secrets.token_hex(16)
+        token = secrets.token_hex(16)
 
         conn.execute(
-            "INSERT INTO users (username, password_hash, token) VALUES (?, ?, ?)",
-            (username, pw_hash, token),
+            "INSERT INTO users (username, password_hash, nickname, token) VALUES (?, ?, ?, ?)",
+            (username, pw_hash, nickname, token),
         )
         conn.commit()
+        _git_push_db_async()
 
-        return jsonify({"ok": True, "data": {"username": username, "token": token}})
+        return jsonify({"ok": True, "data": {"username": username, "nickname": nickname, "token": token}})
     finally:
         conn.close()
 
@@ -110,14 +161,15 @@ def login():
         if not user or user["password_hash"] != _hash_pw(password):
             return jsonify({"ok": False, "error": "아이디 또는 비밀번호가 올바르지 않습니다"}), 401
 
-        # 새 토큰 발급 (로그인마다 갱신)
         token = secrets.token_hex(16)
         conn.execute("UPDATE users SET token = ? WHERE id = ?", (token, user["id"]))
         conn.commit()
+        _git_push_db_async()
 
         favorites = json.loads(user["favorites"] or "[]")
+        nickname = user["nickname"] or username
         return jsonify({"ok": True, "data": {
-            "username": username, "token": token, "favorites": favorites
+            "username": username, "nickname": nickname, "token": token, "favorites": favorites
         }})
     finally:
         conn.close()
@@ -137,7 +189,9 @@ def me():
 
         favorites = json.loads(user["favorites"] or "[]")
         return jsonify({"ok": True, "data": {
-            "username": user["username"], "favorites": favorites
+            "username": user["username"],
+            "nickname": user["nickname"] or user["username"],
+            "favorites": favorites
         }})
     finally:
         conn.close()
@@ -145,7 +199,6 @@ def me():
 
 @auth_bp.post("/favorites")
 def update_favorites():
-    """즐겨찾기 동기화 — 토큰 기반"""
     token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     if not token:
         return jsonify({"ok": False, "error": "토큰 없음"}), 401
@@ -164,9 +217,37 @@ def update_favorites():
             (json.dumps(favorites, ensure_ascii=False), user["id"]),
         )
         conn.commit()
+        _git_push_db_async()
         return jsonify({"ok": True})
     finally:
         conn.close()
+
+
+@auth_bp.post("/nickname")
+def update_nickname():
+    token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    if not token:
+        return jsonify({"ok": False, "error": "토큰 없음"}), 401
+
+    body = request.get_json(force=True)
+    nickname = (body.get("nickname") or "").strip()
+
+    if not nickname or len(nickname) < 1 or len(nickname) > 12:
+        return jsonify({"ok": False, "error": "닉네임은 1~12자여야 합니다"}), 400
+
+    conn = _get_db()
+    try:
+        user = conn.execute("SELECT id FROM users WHERE token = ?", (token,)).fetchone()
+        if not user:
+            return jsonify({"ok": False, "error": "유효하지 않은 토큰"}), 401
+
+        conn.execute("UPDATE users SET nickname = ? WHERE id = ?", (nickname, user["id"]))
+        conn.commit()
+        _git_push_db_async()
+        return jsonify({"ok": True, "data": {"nickname": nickname}})
+    finally:
+        conn.close()
+
 
 @auth_bp.get("/debug-path")
 def debug_path():
@@ -175,7 +256,8 @@ def debug_path():
         "ok": True,
         "db_path": DB_PATH,
         "exists": os.path.exists(DB_PATH),
+        "tracked_db": _TRACKED_DB,
+        "tracked_exists": os.path.exists(_TRACKED_DB),
         "repo_dir": _REPO_DIR,
-        "parent_dir": _PARENT_DIR,
-        "parent_writable": os.access(_PARENT_DIR, os.W_OK),
+        "github_configured": bool(os.environ.get("GITHUB_TOKEN") and os.environ.get("GITHUB_REPO")),
     })

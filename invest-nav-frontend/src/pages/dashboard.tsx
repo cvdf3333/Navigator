@@ -47,14 +47,14 @@ function LeverageSimulator() {
     return { normal, lev2 };
   })();
 
-  const BAR_W = 28;
-  const BAR_GAP = 4;
-  const PAIR_GAP = 14;
-  const CHART_H = 180;
-  const LABEL_H = 36;
-  const BOTTOM_PAD = 36;
+  const BAR_W = 22;
+  const BAR_GAP = 3;
+  const PAIR_GAP = 10;
+  const CHART_H = 130;
+  const LABEL_H = 28;
+  const BOTTOM_PAD = 30;
   const SVG_H = CHART_H + LABEL_H + BOTTOM_PAD;
-  const PADDING_L = 36;
+  const PADDING_L = 30;
   const totalPairs = ROUNDS;
   const pairW = BAR_W * 2 + BAR_GAP + PAIR_GAP;
   const SVG_W = PADDING_L + totalPairs * pairW + 40;
@@ -77,14 +77,14 @@ function LeverageSimulator() {
         {/* 기준선 */}
         <line x1={PADDING_L} y1={baseY} x2={SVG_W} y2={baseY}
           stroke="#475569" strokeWidth="1" strokeDasharray="4 2" />
-        <text x={PADDING_L - 4} y={baseY + 4} textAnchor="end" fontSize="7.5" fill="#64748B">100</text>
+        <text x={PADDING_L - 4} y={baseY + 4} textAnchor="end" fontSize="6.5" fill="#64748B">100</text>
 
         {/* Y축 눈금 */}
         {[Math.floor(yMin/5)*5, Math.ceil((yMax)/5)*5].map(v => (
           <g key={v}>
             <line x1={PADDING_L} y1={toY(v)} x2={SVG_W} y2={toY(v)}
               stroke="#1E2433" strokeWidth="0.5" />
-            <text x={PADDING_L - 4} y={toY(v) + 4} textAnchor="end" fontSize="7.5" fill="#334155">
+            <text x={PADDING_L - 4} y={toY(v) + 4} textAnchor="end" fontSize="6.5" fill="#334155">
               {v.toFixed(0)}
             </text>
           </g>
@@ -93,7 +93,7 @@ function LeverageSimulator() {
         {/* 시작 바 */}
         <rect x={PADDING_L} y={toY(START)} width={BAR_W} height={Math.abs(toY(START) - toY(START)) || 3}
           fill="#94A3B8" rx="2" />
-        <text x={PADDING_L + BAR_W/2} y={toY(START) - 4} textAnchor="middle" fontSize="7" fill="#94A3B8">시작</text>
+        <text x={PADDING_L + BAR_W/2} y={toY(START) - 4} textAnchor="middle" fontSize="6" fill="#94A3B8">시작</text>
 
         {/* 등락 바 */}
         {data.map((s, i) => {
@@ -107,11 +107,11 @@ function LeverageSimulator() {
               {/* 상승 바 (초록) */}
               <rect x={x} y={upY} width={BAR_W} height={Math.max(upH, 2)}
                 fill={s.up >= START ? "#10B981" : "#EF4444"} rx="2" opacity="0.9" />
-              <text x={x + BAR_W/2} y={upY - 3} textAnchor="middle" fontSize="7.5"
+              <text x={x + BAR_W/2} y={upY - 3} textAnchor="middle" fontSize="6.5"
                 fill={s.up >= START ? "#6EE7B7" : "#FCA5A5"}>
                 {s.up.toFixed(1)}
               </text>
-              <text x={x + BAR_W/2} y={upY + Math.max(upH,2) + 8} textAnchor="middle" fontSize="7"
+              <text x={x + BAR_W/2} y={upY + Math.max(upH,2) + 8} textAnchor="middle" fontSize="6"
                 fill={s.up >= START ? "#6EE7B7" : "#FCA5A5"}>
                 ({s.up >= START ? "+" : ""}{((s.up - START) / START * 100).toFixed(1)}%)
               </text>
@@ -120,11 +120,11 @@ function LeverageSimulator() {
               <rect x={x + BAR_W + BAR_GAP} y={downY} width={BAR_W} height={Math.max(downH, 2)}
                 fill="#EF4444" rx="2" opacity="0.9" />
               <text x={x + BAR_W + BAR_GAP + BAR_W/2} y={downY + Math.max(downH,2) + 8}
-                textAnchor="middle" fontSize="7.5" fill="#FCA5A5">
+                textAnchor="middle" fontSize="6.5" fill="#FCA5A5">
                 {s.down.toFixed(1)}
               </text>
               <text x={x + BAR_W + BAR_GAP + BAR_W/2} y={downY + Math.max(downH,2) + 17}
-                textAnchor="middle" fontSize="7" fill="#FCA5A5">
+                textAnchor="middle" fontSize="6" fill="#FCA5A5">
                 ({((s.down - START) / START * 100).toFixed(1)}%)
               </text>
             </g>
