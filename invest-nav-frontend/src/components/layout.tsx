@@ -158,7 +158,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <span className="text-sm font-medium text-white">{fav.name}</span>
-                  <span className="text-xs text-slate-500 ml-2 font-mono">{fav.symbol}</span>
+                  <span className="text-xs text-slate-500 ml-2 font-sans">{fav.symbol}</span>
                 </div>
                 <button onClick={() => remove(fav.symbol)}
                   className="text-slate-600 hover:text-rose-400 transition-colors">
@@ -171,7 +171,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
                 </div>
               ) : news ? (
                 <div className="flex items-center gap-3 text-xs">
-                  <span className={`font-bold font-mono ${avg >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                  <span className={`font-bold font-sans ${avg >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                     {avg >= 0 ? "+" : ""}{news.avg}
                   </span>
                   <span className="text-emerald-400 flex items-center gap-1">
@@ -317,7 +317,7 @@ function ProfilePanel({ onClose }: { onClose: () => void }) {
                   <button key={s.symbol} onClick={() => add(s)}
                     className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-700 text-left">
                     <span className="text-slate-200">{s.name}</span>
-                    <span className="text-slate-500 font-mono">{s.symbol}</span>
+                    <span className="text-slate-500 font-sans">{s.symbol}</span>
                   </button>
                 ))}
               </div>
@@ -336,7 +336,7 @@ function ProfilePanel({ onClose }: { onClose: () => void }) {
               className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-slate-800 transition-colors">
               <div>
                 <span className="text-xs text-slate-200 font-medium">{f.name}</span>
-                <span className="text-[10px] text-slate-500 ml-1.5 font-mono">{f.symbol}</span>
+                <span className="text-[10px] text-slate-500 ml-1.5 font-sans">{f.symbol}</span>
               </div>
               <button onClick={() => remove(f.symbol)}
                 className="text-slate-600 hover:text-rose-400 transition-colors">

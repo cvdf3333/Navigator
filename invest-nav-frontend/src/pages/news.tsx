@@ -15,7 +15,7 @@ function ScoreBar({ score }: { score: number }) {
   const pos  = score >= 0;
   return (
     <div className="flex items-center gap-2">
-      <span className={`font-mono text-xs font-bold min-w-[44px] ${pos ? "text-emerald-400" : "text-rose-400"}`}>
+      <span className={`font-sans text-xs font-bold min-w-[44px] ${pos ? "text-emerald-400" : "text-rose-400"}`}>
         {score > 0 ? "+" : ""}{score.toFixed(2)}
       </span>
       <div className="w-20 h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -120,7 +120,7 @@ export default function News() {
                   className={`w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors text-left
                     ${selectedSymbol === s.symbol ? "bg-blue-600/10 text-blue-400" : "text-slate-200"}`}>
                   <span className="font-medium">{s.name}</span>
-                  <span className="text-slate-500 text-xs font-mono">{s.symbol}</span>
+                  <span className="text-slate-500 text-xs font-sans">{s.symbol}</span>
                 </button>
               ))}
               {searchQ && POPULAR_STOCKS.filter(s =>
@@ -159,7 +159,7 @@ export default function News() {
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-card border border-border rounded-xl p-4">
               <div className="text-xs text-slate-400 mb-2">전체 평균 감성</div>
-              <div className={`text-3xl font-bold font-mono ${Number(avgScore) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+              <div className={`text-3xl font-bold font-sans ${Number(avgScore) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                 {Number(avgScore) > 0 ? "+" : ""}{avgScore}
               </div>
             </div>
@@ -167,13 +167,13 @@ export default function News() {
               <div className="text-xs text-slate-400 mb-2 flex items-center gap-1">
                 <TrendingUp className="w-3 h-3 text-emerald-400" /> 긍정 기사
               </div>
-              <div className="text-3xl font-bold font-mono text-emerald-400">{posNews.length}건</div>
+              <div className="text-3xl font-bold font-sans text-emerald-400">{posNews.length}건</div>
             </div>
             <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4">
               <div className="text-xs text-slate-400 mb-2 flex items-center gap-1">
                 <TrendingDown className="w-3 h-3 text-rose-400" /> 부정 기사
               </div>
-              <div className="text-3xl font-bold font-mono text-rose-400">{negNews.length}건</div>
+              <div className="text-3xl font-bold font-sans text-rose-400">{negNews.length}건</div>
             </div>
           </div>
 
@@ -249,7 +249,7 @@ function NewsList({ items }: { items: NewsItem[] }) {
               {item.grade && (
                 <span className={`text-[9px] font-bold px-1 rounded text-white mb-0.5 ${GRADE_COLOR[item.grade] || "bg-slate-600"}`}>{item.grade}</span>
               )}
-              <span className="text-xs font-mono font-bold">{((item.sentimentScore ?? (item.sentimentScore ?? item.sentiment_score ?? 0) ?? 0)) > 0 ? "+" : ""}{((item.sentimentScore ?? (item.sentimentScore ?? item.sentiment_score ?? 0) ?? 0)).toFixed(1)}</span>
+              <span className="text-xs font-sans font-bold">{((item.sentimentScore ?? (item.sentimentScore ?? item.sentiment_score ?? 0) ?? 0)) > 0 ? "+" : ""}{((item.sentimentScore ?? (item.sentimentScore ?? item.sentiment_score ?? 0) ?? 0)).toFixed(1)}</span>
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">

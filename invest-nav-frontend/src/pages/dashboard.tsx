@@ -47,14 +47,14 @@ function LeverageSimulator() {
     return { normal, lev2 };
   })();
 
-  const BAR_W = 50;
-  const BAR_GAP = 8;
-  const PAIR_GAP = 28;
-  const CHART_H = 220;
-  const LABEL_H = 50;   // 상단 "시작" 라벨 여유
-  const BOTTOM_PAD = 55; // 하단 % 텍스트 여유 (레버리지 큰 변동폭 대응)
+  const BAR_W = 28;
+  const BAR_GAP = 4;
+  const PAIR_GAP = 14;
+  const CHART_H = 180;
+  const LABEL_H = 36;
+  const BOTTOM_PAD = 36;
   const SVG_H = CHART_H + LABEL_H + BOTTOM_PAD;
-  const PADDING_L = 46;
+  const PADDING_L = 36;
   const totalPairs = ROUNDS;
   const pairW = BAR_W * 2 + BAR_GAP + PAIR_GAP;
   const SVG_W = PADDING_L + totalPairs * pairW + 40;
@@ -77,14 +77,14 @@ function LeverageSimulator() {
         {/* 기준선 */}
         <line x1={PADDING_L} y1={baseY} x2={SVG_W} y2={baseY}
           stroke="#475569" strokeWidth="1" strokeDasharray="4 2" />
-        <text x={PADDING_L - 4} y={baseY + 4} textAnchor="end" fontSize="9" fill="#64748B">100</text>
+        <text x={PADDING_L - 4} y={baseY + 4} textAnchor="end" fontSize="7.5" fill="#64748B">100</text>
 
         {/* Y축 눈금 */}
         {[Math.floor(yMin/5)*5, Math.ceil((yMax)/5)*5].map(v => (
           <g key={v}>
             <line x1={PADDING_L} y1={toY(v)} x2={SVG_W} y2={toY(v)}
               stroke="#1E2433" strokeWidth="0.5" />
-            <text x={PADDING_L - 4} y={toY(v) + 4} textAnchor="end" fontSize="9" fill="#334155">
+            <text x={PADDING_L - 4} y={toY(v) + 4} textAnchor="end" fontSize="7.5" fill="#334155">
               {v.toFixed(0)}
             </text>
           </g>
@@ -93,7 +93,7 @@ function LeverageSimulator() {
         {/* 시작 바 */}
         <rect x={PADDING_L} y={toY(START)} width={BAR_W} height={Math.abs(toY(START) - toY(START)) || 3}
           fill="#94A3B8" rx="2" />
-        <text x={PADDING_L + BAR_W/2} y={toY(START) - 4} textAnchor="middle" fontSize="8" fill="#94A3B8">시작</text>
+        <text x={PADDING_L + BAR_W/2} y={toY(START) - 4} textAnchor="middle" fontSize="7" fill="#94A3B8">시작</text>
 
         {/* 등락 바 */}
         {data.map((s, i) => {
@@ -107,11 +107,11 @@ function LeverageSimulator() {
               {/* 상승 바 (초록) */}
               <rect x={x} y={upY} width={BAR_W} height={Math.max(upH, 2)}
                 fill={s.up >= START ? "#10B981" : "#EF4444"} rx="2" opacity="0.9" />
-              <text x={x + BAR_W/2} y={upY - 3} textAnchor="middle" fontSize="8.5"
+              <text x={x + BAR_W/2} y={upY - 3} textAnchor="middle" fontSize="7.5"
                 fill={s.up >= START ? "#6EE7B7" : "#FCA5A5"}>
                 {s.up.toFixed(1)}
               </text>
-              <text x={x + BAR_W/2} y={upY + Math.max(upH,2) + 8} textAnchor="middle" fontSize="8"
+              <text x={x + BAR_W/2} y={upY + Math.max(upH,2) + 8} textAnchor="middle" fontSize="7"
                 fill={s.up >= START ? "#6EE7B7" : "#FCA5A5"}>
                 ({s.up >= START ? "+" : ""}{((s.up - START) / START * 100).toFixed(1)}%)
               </text>
@@ -120,11 +120,11 @@ function LeverageSimulator() {
               <rect x={x + BAR_W + BAR_GAP} y={downY} width={BAR_W} height={Math.max(downH, 2)}
                 fill="#EF4444" rx="2" opacity="0.9" />
               <text x={x + BAR_W + BAR_GAP + BAR_W/2} y={downY + Math.max(downH,2) + 8}
-                textAnchor="middle" fontSize="8.5" fill="#FCA5A5">
+                textAnchor="middle" fontSize="7.5" fill="#FCA5A5">
                 {s.down.toFixed(1)}
               </text>
               <text x={x + BAR_W + BAR_GAP + BAR_W/2} y={downY + Math.max(downH,2) + 17}
-                textAnchor="middle" fontSize="8" fill="#FCA5A5">
+                textAnchor="middle" fontSize="7" fill="#FCA5A5">
                 ({((s.down - START) / START * 100).toFixed(1)}%)
               </text>
             </g>
@@ -147,16 +147,16 @@ function LeverageSimulator() {
         (시작값 100 기준)
       </p>
 
-      <div className="grid grid-cols-1 gap-8">
+      <div className="grid grid-cols-2 gap-4">
         {renderChart(steps.normal, "#10B981", `일반 주식 (±${CHANGE}%)`)}
         {renderChart(steps.lev2,   "#F59E0B", `2배 레버리지 (±${CHANGE*2}%)`)}
       </div>
 
       {/* 최종 결과 비교 */}
-      <div className="grid grid-cols-2 gap-3 mt-4">
+      <div className="grid grid-cols-2 gap-3 mt-6">
         <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-center">
           <div className="text-xs text-slate-400 mb-1">일반 주식 최종</div>
-          <div className={`text-xl font-bold font-mono ${finalNormal >= START ? "text-emerald-400" : "text-rose-400"}`}>
+          <div className={`text-xl font-bold font-sans ${finalNormal >= START ? "text-emerald-400" : "text-rose-400"}`}>
             {finalNormal.toFixed(2)}
           </div>
           <div className="text-xs text-slate-500">
@@ -166,7 +166,7 @@ function LeverageSimulator() {
         </div>
         <div className="bg-slate-800/60 border border-amber-500/20 rounded-xl p-3 text-center">
           <div className="text-xs text-amber-400 mb-1 font-semibold">2배 레버리지 최종</div>
-          <div className={`text-xl font-bold font-mono ${finalLev2 >= START ? "text-emerald-400" : "text-rose-400"}`}>
+          <div className={`text-xl font-bold font-sans ${finalLev2 >= START ? "text-emerald-400" : "text-rose-400"}`}>
             {finalLev2.toFixed(2)}
           </div>
           <div className="text-xs text-slate-500">
@@ -233,7 +233,7 @@ export default function Dashboard() {
     <div className="space-y-8">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500 font-mono">
+        <p className="text-xs text-slate-500 font-sans">
           {time.toLocaleDateString("ko-KR", { weekday:"long", year:"numeric", month:"long", day:"numeric" })}
           {" · "}{time.toLocaleTimeString("ko-KR")}
         </p>
@@ -257,15 +257,15 @@ export default function Dashboard() {
                 {loading || !macro ? (
                   <><Skeleton className="h-6 w-24 mb-1 bg-slate-800" /><Skeleton className="h-4 w-16 bg-slate-800" /></>
                 ) : !d || d.value === null ? (
-                  <><div className="text-lg font-bold font-mono text-slate-500">—</div><div className="text-xs text-slate-600 mt-1">데이터 없음</div></>
+                  <><div className="text-lg font-bold font-sans text-slate-500">—</div><div className="text-xs text-slate-600 mt-1">데이터 없음</div></>
                 ) : (
-                  <>
-                    <div className="text-lg font-bold font-mono text-white leading-tight">{fmtPrice(d.value)}</div>
-                    <div className={`flex items-center gap-1 mt-1 text-xs font-mono font-semibold ${up ? "text-emerald-400" : "text-rose-400"}`}>
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="text-2xl font-bold font-sans text-white leading-tight">{fmtPrice(d.value)}</div>
+                    <div className={`flex items-center gap-1 text-xs font-sans font-semibold shrink-0 ${up ? "text-emerald-400" : "text-rose-400"}`}>
                       {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {up ? "+" : ""}{d.changePct?.toFixed(2)}%
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
             );
@@ -295,15 +295,15 @@ export default function Dashboard() {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <div className="text-xs text-slate-400 mb-1">코스피 (원화)</div>
-                    <div className="text-2xl font-bold font-mono text-white">{analysis.kospi_usd.current_krw?.toLocaleString()} pt</div>
+                    <div className="text-2xl font-bold font-sans text-white">{analysis.kospi_usd.current_krw?.toLocaleString()} pt</div>
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 mb-1">USD/KRW</div>
-                    <div className="text-2xl font-bold font-mono text-white">{analysis.kospi_usd.usdkrw?.toLocaleString()} 원</div>
+                    <div className="text-2xl font-bold font-sans text-white">{analysis.kospi_usd.usdkrw?.toLocaleString()} 원</div>
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 mb-1">코스피 (달러 환산)</div>
-                    <div className="text-2xl font-bold font-mono text-white">${analysis.kospi_usd.current_usd?.toFixed(2)}</div>
+                    <div className="text-2xl font-bold font-sans text-white">${analysis.kospi_usd.current_usd?.toFixed(2)}</div>
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 mt-3">💡 {analysis.kospi_usd.description}</p>
@@ -323,15 +323,15 @@ export default function Dashboard() {
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     <div>
                       <div className="text-xs text-slate-400 mb-1">코스피 전체 상승</div>
-                      <div className="text-2xl font-bold font-mono text-white">{sk.kospi_return > 0 ? "+" : ""}{sk.kospi_return?.toFixed(2)}%</div>
+                      <div className="text-2xl font-bold font-sans text-white">{sk.kospi_return > 0 ? "+" : ""}{sk.kospi_return?.toFixed(2)}%</div>
                     </div>
                     <div>
                       <div className="text-xs text-slate-400 mb-1">삼성+하이닉스 기여</div>
-                      <div className="text-2xl font-bold font-mono text-rose-400">{sk.semicon_contribution > 0 ? "+" : ""}{sk.semicon_contribution?.toFixed(2)}%p</div>
+                      <div className="text-2xl font-bold font-sans text-rose-400">{sk.semicon_contribution > 0 ? "+" : ""}{sk.semicon_contribution?.toFixed(2)}%p</div>
                     </div>
                     <div>
                       <div className="text-xs text-slate-400 mb-1">나머지 종목 기여</div>
-                      <div className="text-2xl font-bold font-mono text-blue-400">{sk.others_contribution > 0 ? "+" : ""}{sk.others_contribution?.toFixed(2)}%p</div>
+                      <div className="text-2xl font-bold font-sans text-blue-400">{sk.others_contribution > 0 ? "+" : ""}{sk.others_contribution?.toFixed(2)}%p</div>
                     </div>
                   </div>
                   <ResponsiveContainer width="100%" height={200}>
@@ -365,17 +365,17 @@ export default function Dashboard() {
                 <div className="grid grid-cols-3 gap-4 mb-3">
                   <div>
                     <div className="text-xs text-slate-400 mb-1">달러 인덱스 (DXY)</div>
-                    <div className="text-2xl font-bold font-mono text-white">{analysis.dxy_analysis.dxy_current?.toFixed(2)}</div>
+                    <div className="text-2xl font-bold font-sans text-white">{analysis.dxy_analysis.dxy_current?.toFixed(2)}</div>
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 mb-1">DXY 1년 변화</div>
-                    <div className={`text-2xl font-bold font-mono ${(analysis.dxy_analysis.dxy_1y_change ?? 0) >= 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                    <div className={`text-2xl font-bold font-sans ${(analysis.dxy_analysis.dxy_1y_change ?? 0) >= 0 ? "text-rose-400" : "text-emerald-400"}`}>
                       {(analysis.dxy_analysis.dxy_1y_change ?? 0) >= 0 ? "+" : ""}{analysis.dxy_analysis.dxy_1y_change?.toFixed(2)}%
                     </div>
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 mb-1">코스피-DXY 상관계수</div>
-                    <div className="text-2xl font-bold font-mono text-white">{analysis.dxy_analysis.kospi_dxy_corr?.toFixed(3)}</div>
+                    <div className="text-2xl font-bold font-sans text-white">{analysis.dxy_analysis.kospi_dxy_corr?.toFixed(3)}</div>
                   </div>
                 </div>
                 <div className="text-sm text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-2">
@@ -443,7 +443,7 @@ export default function Dashboard() {
                 return (
                   <a key={i} href={(item.url !== "#" ? item.url : undefined)} target="_blank" rel="noreferrer"
                     className="p-4 hover:bg-slate-800/40 transition-colors flex items-start gap-3 block">
-                    <div className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center font-mono text-sm font-bold border
+                    <div className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center font-sans text-sm font-bold border
                       ${pos ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"}`}>
                       {pos ? "+" : ""}{rawScore.toFixed(1)}
                     </div>

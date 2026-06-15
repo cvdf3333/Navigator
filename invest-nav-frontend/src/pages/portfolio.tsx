@@ -166,7 +166,7 @@ function BacktestPanel({ holdings, totalAmt }: {
             })().map(({ label, val, cls }) => (
               <div key={label} className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 text-center">
                 <div className="text-xs text-slate-400 mb-1">{label}</div>
-                <div className={"text-lg font-bold font-mono " + cls}>{val}</div>
+                <div className={"text-lg font-bold font-sans " + cls}>{val}</div>
               </div>
             ))}
           </div>
@@ -175,12 +175,12 @@ function BacktestPanel({ holdings, totalAmt }: {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
               <div className="text-xs text-blue-400 font-semibold mb-2">📊 내 포트폴리오</div>
-              <div className={"text-2xl font-bold font-mono " + (Number(result.totalReturn) >= 0 ? "text-emerald-400" : "text-rose-400")}>
+              <div className={"text-2xl font-bold font-sans " + (Number(result.totalReturn) >= 0 ? "text-emerald-400" : "text-rose-400")}>
                 {Number(result.totalReturn) >= 0 ? "+" : ""}{Number(result.totalReturn).toFixed(2)}%
               </div>
               <div className="text-xs text-slate-400 mt-1">최종 잔액: {Number(result.finalValue).toLocaleString()}원</div>
               {totalAmt > 0 && (
-                <div className={"text-xs font-mono mt-1 " + (Number(result.totalReturn) >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                <div className={"text-xs font-sans mt-1 " + (Number(result.totalReturn) >= 0 ? "text-emerald-400" : "text-rose-400")}>
                   {fmtAmt(Number(result.finalValue) - totalAmt)}
                 </div>
               )}
@@ -189,7 +189,7 @@ function BacktestPanel({ holdings, totalAmt }: {
               <div className="text-xs text-slate-400 font-semibold mb-2">
                 📈 {BENCHMARKS.find(b => b.value === benchmark)?.label}
               </div>
-              <div className={"text-2xl font-bold font-mono " + (Number(result.benchmarkReturn) >= 0 ? "text-emerald-400" : "text-rose-400")}>
+              <div className={"text-2xl font-bold font-sans " + (Number(result.benchmarkReturn) >= 0 ? "text-emerald-400" : "text-rose-400")}>
                 {Number(result.benchmarkReturn) >= 0 ? "+" : ""}{Number(result.benchmarkReturn).toFixed(2)}%
               </div>
               <div className={"text-xs font-semibold mt-2 " + (Number(result.totalReturn) >= Number(result.benchmarkReturn) ? "text-emerald-400" : "text-rose-400")}>
@@ -204,15 +204,15 @@ function BacktestPanel({ holdings, totalAmt }: {
           <div className="grid grid-cols-3 gap-3 text-center text-sm">
             <div className="bg-slate-800/40 rounded-lg p-3">
               <div className="text-xs text-slate-400">연간 변동성</div>
-              <div className="font-bold font-mono text-white">{Number(result.volatility).toFixed(1)}%</div>
+              <div className="font-bold font-sans text-white">{Number(result.volatility).toFixed(1)}%</div>
             </div>
             <div className="bg-slate-800/40 rounded-lg p-3">
               <div className="text-xs text-slate-400">승률</div>
-              <div className="font-bold font-mono text-white">{Number(result.winRate).toFixed(1)}%</div>
+              <div className="font-bold font-sans text-white">{Number(result.winRate).toFixed(1)}%</div>
             </div>
             <div className="bg-slate-800/40 rounded-lg p-3">
               <div className="text-xs text-slate-400">데이터 기간</div>
-              <div className="font-bold font-mono text-white">{Array.isArray(result.dataPoints) ? result.dataPoints.length : result.dataPoints}일</div>
+              <div className="font-bold font-sans text-white">{Array.isArray(result.dataPoints) ? result.dataPoints.length : result.dataPoints}일</div>
             </div>
           </div>
         </div>
@@ -336,7 +336,7 @@ function StockSearchInput({
                 className={`w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-800 transition-colors text-left
                   ${value === s.symbol ? "bg-blue-600/10 text-blue-400" : "text-slate-200"}`}>
                 <span className="font-medium">{s.name}</span>
-                <span className="text-slate-500 font-mono">{s.symbol}</span>
+                <span className="text-slate-500 font-sans">{s.symbol}</span>
               </button>
             ))}
           </div>
@@ -405,7 +405,7 @@ export default function Portfolio() {
               type="number"
               value={totalAmt}
               onChange={e => setTotalAmt(Number(e.target.value))}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-sans text-sm focus:outline-none focus:border-blue-500"
             />
             <p className="text-xs text-slate-500 mt-1">≈ {fmt(totalAmt)}</p>
           </div>
@@ -414,7 +414,7 @@ export default function Portfolio() {
           <div className="bg-card border border-border rounded-xl p-5 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-300">🎯 구성 종목 & 비중</h3>
-              <span className={`text-xs font-mono font-bold ${Math.abs(totalW - 100) < 0.5 ? "text-emerald-400" : "text-amber-400"}`}>
+              <span className={`text-xs font-sans font-bold ${Math.abs(totalW - 100) < 0.5 ? "text-emerald-400" : "text-amber-400"}`}>
                 합계 {totalW}%
               </span>
             </div>
@@ -435,7 +435,7 @@ export default function Portfolio() {
                   <input
                     type="number" min={0} max={100} value={h.weight}
                     onChange={e => updateWeight(idx, Number(e.target.value))}
-                    className="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono text-sm focus:outline-none focus:border-blue-500 text-center"
+                    className="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-sans text-sm focus:outline-none focus:border-blue-500 text-center"
                   />
                   <span className="text-slate-500 text-xs">%</span>
                   {totalAmt > 0 && (
@@ -486,7 +486,7 @@ export default function Portfolio() {
                     </button>
                   </div>
                   <div className="text-center">
-                    <div className="text-5xl font-black font-mono" style={{ color: scoreColor }}>
+                    <div className="text-5xl font-black font-sans" style={{ color: scoreColor }}>
                       {rr?.score?.toFixed(2)}
                     </div>
                     <div className="text-sm text-slate-400 mt-1">/10점 · {rr?.label_kr}</div>
@@ -502,12 +502,12 @@ export default function Portfolio() {
                   <div className="grid grid-cols-2 gap-2 mt-4">
                     <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 text-center">
                       <div className="text-xs text-slate-400">📈 기대 수익</div>
-                      <div className="text-sm font-bold text-emerald-400 font-mono">+{rr?.reward?.toFixed(1)}%</div>
+                      <div className="text-sm font-bold text-emerald-400 font-sans">+{rr?.reward?.toFixed(1)}%</div>
                       {totalAmt > 0 && <div className="text-[10px] text-slate-500">+{fmt(Math.round(totalAmt * (rr?.reward || 0) / 100))}</div>}
                     </div>
                     <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-2 text-center">
                       <div className="text-xs text-slate-400">📉 예상 손실</div>
-                      <div className="text-sm font-bold text-rose-400 font-mono">-{rr?.risk?.toFixed(1)}%</div>
+                      <div className="text-sm font-bold text-rose-400 font-sans">-{rr?.risk?.toFixed(1)}%</div>
                       {totalAmt > 0 && <div className="text-[10px] text-slate-500">-{fmt(Math.round(totalAmt * (rr?.risk || 0) / 100))}</div>}
                     </div>
                   </div>
@@ -537,7 +537,7 @@ export default function Portfolio() {
                           <div className="w-2 h-2 rounded-full" style={{ background: SECTOR_COLORS[i % SECTOR_COLORS.length] }} />
                           <span className="text-slate-400">{name}</span>
                         </div>
-                        <span className="text-slate-300 font-mono">{String(value)}%</span>
+                        <span className="text-slate-300 font-sans">{String(value)}%</span>
                       </div>
                     ))}
                   </div>
@@ -564,7 +564,7 @@ export default function Portfolio() {
                         return (
                           <div key={key} className="text-center p-2 rounded-lg" style={{ background: `${color}10`, border: `1px solid ${color}25` }}>
                             <div className="text-[10px] text-slate-400">{label}</div>
-                            <div className="text-sm font-bold font-mono" style={{ color }}>{key !== "bear" ? "+" : ""}{s?.return}%</div>
+                            <div className="text-sm font-bold font-sans" style={{ color }}>{key !== "bear" ? "+" : ""}{s?.return}%</div>
                             <div className="text-[10px] text-slate-500">{s?.prob}%</div>
                           </div>
                         );
@@ -584,7 +584,7 @@ export default function Portfolio() {
                     return (
                       <div key={sc.scenario} className="rounded-xl p-4 text-center border" style={{ background: `${color}0D`, borderColor: `${color}33` }}>
                         <div className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color }}>{sc.emoji} {sc.scenario}</div>
-                        <div className="text-2xl font-black font-mono" style={{ color }}>{sc.expectedReturn > 0 ? "+" : ""}{sc.expectedReturn.toFixed(1)}%</div>
+                        <div className="text-2xl font-black font-sans" style={{ color }}>{sc.expectedReturn > 0 ? "+" : ""}{sc.expectedReturn.toFixed(1)}%</div>
                         <div className="text-xs text-slate-500 mt-1">확률 {sc.probability}%</div>
                         {amtV > 0 && <div className="text-xs text-slate-600 mt-0.5">{sc.expectedReturn >= 0 ? "+" : "-"}{fmt(amtV)}</div>}
                         <div className="text-[10px] text-slate-500 mt-2 border-t pt-2" style={{ borderColor: `${color}22` }}>{sc.description}</div>
