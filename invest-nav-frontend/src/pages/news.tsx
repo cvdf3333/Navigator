@@ -90,6 +90,7 @@ export default function News() {
       <div>
         <h2 className="text-2xl font-bold text-white tracking-tight">뉴스 & 공시</h2>
         <p className="text-sm text-slate-500 mt-1">CLOVA Studio AI가 기사 원문을 분석해 감성을 판단합니다.</p>
+        <p className="text-xs text-slate-600 mt-1">※ AI 분석 결과는 100% 정확하지 않을 수 있습니다.</p>
       </div>
 
       {/* 종목 검색 + 조회 버튼 */}

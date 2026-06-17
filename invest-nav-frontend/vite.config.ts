@@ -19,7 +19,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "dist",
+    outDir: "../dist",
+    emptyOutDir: true,
     assetsDir: "assets",
     // 청크 크기 경고 임계값 높이기
     chunkSizeWarningLimit: 1000,
