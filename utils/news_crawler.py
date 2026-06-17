@@ -788,16 +788,20 @@ def _title_is_relevant(title: str, keywords: list[str]) -> bool:
 
 
 def _filter_relevant(news_list: list[dict], symbol: str) -> list[dict]:
-    """제목 관련성 필터. 단, 과도하게 걸러서 기사가 너무 적어지면 원본 유지."""
+    """제목 관련성 필터.
+    관련 기사가 1건이라도 있으면 그것만 사용(정확도 우선).
+    0건일 때만 원본 유지(빈 화면 방지)."""
     keywords = _relevance_keywords(symbol)
     if not keywords:
         return news_list
     matched = [n for n in news_list if _title_is_relevant(n.get("title", ""), keywords)]
-    # 관련 기사가 3건 미만이면 필터가 과했다고 보고 원본을 그대로 둠
-    if len(matched) < 3:
-        return news_list
-    print(f"[관련성] {symbol}: {len(news_list)}건 → {len(matched)}건 (키워드 {keywords})")
-    return matched
+    if matched:
+        if len(matched) != len(news_list):
+            print(f"[관련성] {symbol}: {len(news_list)}건 → {len(matched)}건 (키워드 {keywords})")
+        return matched
+    # 제목에 키워드가 하나도 없으면 → 검색 결과 자체가 빗나간 것. 원본 유지
+    print(f"[관련성] {symbol}: 제목 매칭 0건 → 원본 유지 (키워드 {keywords})")
+    return news_list
 
 
 def _collect_search_news(symbol: str, limit: int) -> list[dict]:
