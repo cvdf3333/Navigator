@@ -693,6 +693,10 @@ def _crawl_naver_news_impl(symbol: str, limit: int = 10) -> list[dict]:
         print(f"[뉴스] {symbol} — 수집된 기사 없음")
         return []
 
+    # ── 관련성 필터 (제목에 종목 키워드 없는 기사 제거) ──────
+    # 해외 종목 검색에서 키워드만 스친 무관한 기사를 걸러냄
+    raw_items = _filter_relevant(raw_items, symbol)
+
     # ── 품질 필터 (감성 분석 전에 먼저 중복·오래된 기사 제거) ──
     raw_items = filter_quality_news(
         raw_items,
@@ -718,6 +722,84 @@ def _crawl_naver_news_impl(symbol: str, limit: int = 10) -> list[dict]:
     return results
 
 
+# ── 해외 종목 한글명 매핑 (모듈 레벨: 검색 + 관련성 필터 공용) ──
+_OVERSEAS_KR = {
+    "NVDA": "엔비디아", "AAPL": "애플", "MSFT": "마이크로소프트",
+    "GOOGL": "구글", "GOOG": "구글", "AMZN": "아마존", "META": "메타",
+    "TSLA": "테슬라", "AMD": "AMD", "INTC": "인텔", "AVGO": "브로드컴",
+    "QCOM": "퀄컴", "MU": "마이크론", "NFLX": "넷플릭스",
+    "CRM": "세일즈포스", "ORCL": "오라클", "NOW": "서비스나우",
+    "ADBE": "어도비", "INTU": "인튜이트", "WDAY": "워크데이",
+    "TEAM": "아틀라시안", "SNOW": "스노우플레이크", "DDOG": "데이터도그",
+    "CRWD": "크라우드스트라이크", "PANW": "팔로알토", "ZS": "지스케일러",
+    "NET": "클라우드플레어", "OKTA": "옥타", "FTNT": "포티넷",
+    "PLTR": "팔란티어", "ARM": "ARM", "ASML": "ASML",
+    "AMAT": "어플라이드머티어리얼즈", "LRCX": "램리서치",
+    "KLAC": "KLA", "MRVL": "마벨", "ON": "온세미",
+    "TXN": "텍사스인스트루먼트", "ADI": "아날로그디바이시스",
+    "JPM": "JP모건", "BAC": "뱅크오브아메리카", "GS": "골드만삭스",
+    "MS": "모건스탠리", "WFC": "웰스파고", "C": "씨티그룹",
+    "BX": "블랙스톤", "KKR": "KKR", "BLK": "블랙록",
+    "WMT": "월마트", "COST": "코스트코", "HD": "홈디포",
+    "TGT": "타깃", "NKE": "나이키", "SBUX": "스타벅스",
+    "MCD": "맥도날드", "PG": "P&G", "KO": "코카콜라", "PEP": "펩시코",
+    "XOM": "엑슨모빌", "CVX": "쉐브론", "COP": "코노코필립스",
+    "LLY": "일라이릴리", "JNJ": "존슨앤존슨", "PFE": "화이자",
+    "MRK": "머크", "ABBV": "애브비", "UNH": "유나이티드헬스",
+    "MRNA": "모더나", "BNTX": "바이오엔텍", "ISRG": "인튜이티브서지컬",
+    "LMT": "록히드마틴", "RTX": "레이시온", "NOC": "노스럽그루먼",
+    "GD": "제너럴다이나믹스", "BA": "보잉",
+    "RIVN": "리비안", "LCID": "루시드", "NIO": "니오",
+    "XPEV": "샤오펑", "LI": "리오토",
+    "COIN": "코인베이스", "MSTR": "마이크로스트래티지",
+    "SMCI": "슈퍼마이크로", "DELL": "델",
+    "RKLB": "로켓랩", "JOBY": "조비에비에이션", "ACHR": "아처에비에이션",
+    "PLUG": "플러그파워", "FSLR": "퍼스트솔라", "ENPH": "엔페이즈",
+    "CRSP": "크리스퍼", "BEAM": "빔테라퓨틱스", "EDIT": "에디타스",
+    "V": "비자", "MA": "마스터카드", "PYPL": "페이팔", "SQ": "블록",
+    "UBER": "우버", "ABNB": "에어비앤비", "DASH": "도어대시",
+    "SPOT": "스포티파이", "RBLX": "로블록스", "APP": "앱러빈",
+    "SPY": "S&P500ETF", "QQQ": "나스닥ETF", "SOXX": "반도체ETF",
+    "TQQQ": "나스닥3배레버리지", "SOXL": "반도체3배레버리지",
+    "ARKK": "ARK이노베이션", "GLD": "금ETF", "TLT": "미국채ETF",
+    "IBIT": "비트코인ETF",
+}
+
+
+def _relevance_keywords(symbol: str) -> list[str]:
+    """종목 제목 관련성 판정에 쓸 키워드 목록.
+    예) NVDA → ['엔비디아', 'NVDA', 'NVIDIA']
+    국내 종목처럼 키워드를 모르면 빈 목록(→ 필터 미적용)."""
+    base = symbol.split(".")[0] if "." in symbol else symbol
+    kws = set()
+    kr = _OVERSEAS_KR.get(base, "")
+    if kr:
+        kws.add(kr)
+        kws.add(base.upper())        # 티커 (NVDA 등이 제목에 나오기도 함)
+    return [k for k in kws if k]
+
+
+def _title_is_relevant(title: str, keywords: list[str]) -> bool:
+    """제목에 키워드가 하나라도 들어 있으면 관련 기사로 간주."""
+    if not keywords:
+        return True
+    low = title.lower()
+    return any(k.lower() in low for k in keywords)
+
+
+def _filter_relevant(news_list: list[dict], symbol: str) -> list[dict]:
+    """제목 관련성 필터. 단, 과도하게 걸러서 기사가 너무 적어지면 원본 유지."""
+    keywords = _relevance_keywords(symbol)
+    if not keywords:
+        return news_list
+    matched = [n for n in news_list if _title_is_relevant(n.get("title", ""), keywords)]
+    # 관련 기사가 3건 미만이면 필터가 과했다고 보고 원본을 그대로 둠
+    if len(matched) < 3:
+        return news_list
+    print(f"[관련성] {symbol}: {len(news_list)}건 → {len(matched)}건 (키워드 {keywords})")
+    return matched
+
+
 def _collect_search_news(symbol: str, limit: int) -> list[dict]:
     """
     네이버 공식 검색 API로 뉴스 수집
@@ -728,48 +810,8 @@ def _collect_search_news(symbol: str, limit: int) -> list[dict]:
     client_id     = os.getenv("NAVER_CLIENT_ID", "")
     client_secret = os.getenv("NAVER_CLIENT_SECRET", "")
 
-    # 해외 종목 한글명 매핑
-    OVERSEAS_KR = {
-        "NVDA": "엔비디아", "AAPL": "애플", "MSFT": "마이크로소프트",
-        "GOOGL": "구글", "GOOG": "구글", "AMZN": "아마존", "META": "메타",
-        "TSLA": "테슬라", "AMD": "AMD", "INTC": "인텔", "AVGO": "브로드컴",
-        "QCOM": "퀄컴", "MU": "마이크론", "NFLX": "넷플릭스",
-        "CRM": "세일즈포스", "ORCL": "오라클", "NOW": "서비스나우",
-        "ADBE": "어도비", "INTU": "인튜이트", "WDAY": "워크데이",
-        "TEAM": "아틀라시안", "SNOW": "스노우플레이크", "DDOG": "데이터도그",
-        "CRWD": "크라우드스트라이크", "PANW": "팔로알토", "ZS": "지스케일러",
-        "NET": "클라우드플레어", "OKTA": "옥타", "FTNT": "포티넷",
-        "PLTR": "팔란티어", "ARM": "ARM", "ASML": "ASML",
-        "AMAT": "어플라이드머티어리얼즈", "LRCX": "램리서치",
-        "KLAC": "KLA", "MRVL": "마벨", "ON": "온세미",
-        "TXN": "텍사스인스트루먼트", "ADI": "아날로그디바이시스",
-        "JPM": "JP모건", "BAC": "뱅크오브아메리카", "GS": "골드만삭스",
-        "MS": "모건스탠리", "WFC": "웰스파고", "C": "씨티그룹",
-        "BX": "블랙스톤", "KKR": "KKR", "BLK": "블랙록",
-        "WMT": "월마트", "COST": "코스트코", "HD": "홈디포",
-        "TGT": "타깃", "NKE": "나이키", "SBUX": "스타벅스",
-        "MCD": "맥도날드", "PG": "P&G", "KO": "코카콜라", "PEP": "펩시코",
-        "XOM": "엑슨모빌", "CVX": "쉐브론", "COP": "코노코필립스",
-        "LLY": "일라이릴리", "JNJ": "존슨앤존슨", "PFE": "화이자",
-        "MRK": "머크", "ABBV": "애브비", "UNH": "유나이티드헬스",
-        "MRNA": "모더나", "BNTX": "바이오엔텍", "ISRG": "인튜이티브서지컬",
-        "LMT": "록히드마틴", "RTX": "레이시온", "NOC": "노스럽그루먼",
-        "GD": "제너럴다이나믹스", "BA": "보잉",
-        "RIVN": "리비안", "LCID": "루시드", "NIO": "니오",
-        "XPEV": "샤오펑", "LI": "리오토",
-        "COIN": "코인베이스", "MSTR": "마이크로스트래티지",
-        "SMCI": "슈퍼마이크로", "DELL": "델",
-        "RKLB": "로켓랩", "JOBY": "조비에비에이션", "ACHR": "아처에비에이션",
-        "PLUG": "플러그파워", "FSLR": "퍼스트솔라", "ENPH": "엔페이즈",
-        "CRSP": "크리스퍼", "BEAM": "빔테라퓨틱스", "EDIT": "에디타스",
-        "V": "비자", "MA": "마스터카드", "PYPL": "페이팔", "SQ": "블록",
-        "UBER": "우버", "ABNB": "에어비앤비", "DASH": "도어대시",
-        "SPOT": "스포티파이", "RBLX": "로블록스", "APP": "앱러빈",
-        "SPY": "S&P500ETF", "QQQ": "나스닥ETF", "SOXX": "반도체ETF",
-        "TQQQ": "나스닥3배레버리지", "SOXL": "반도체3배레버리지",
-        "ARKK": "ARK이노베이션", "GLD": "금ETF", "TLT": "미국채ETF",
-        "IBIT": "비트코인ETF",
-    }
+    # 해외 종목 한글명 매핑 (모듈 레벨 _OVERSEAS_KR 재사용)
+    OVERSEAS_KR = _OVERSEAS_KR
 
     base    = symbol.split(".")[0] if "." in symbol else symbol
     kr_name = OVERSEAS_KR.get(base, "")
