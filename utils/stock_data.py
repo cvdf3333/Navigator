@@ -2781,8 +2781,19 @@ def format_grade(grade: str) -> str:
     return f"{info['color']} {info['label']}"
 
 
+# ── 종목 정보/히스토리 TTL 캐시 ───────────────────────────
+_STOCK_INFO_CACHE: dict = {}   # symbol -> (timestamp, result)
+_STOCK_INFO_TTL: float = 120   # 초
+_HIST_CACHE: dict = {}         # (symbol, period) -> (timestamp, DataFrame)
+_HIST_TTL: float = 300         # 초
+
+
 def get_stock_info(symbol: str) -> dict:
-    """주가 정보 조회 (yfinance)"""
+    """주가 정보 조회 (yfinance) — TTL 캐시"""
+    import time
+    cached = _STOCK_INFO_CACHE.get(symbol)
+    if cached and (time.time() - cached[0]) < _STOCK_INFO_TTL:
+        return cached[1]
     try:
         ticker = yf.Ticker(symbol)
         info   = ticker.info
@@ -2818,7 +2829,7 @@ def get_stock_info(symbol: str) -> dict:
             except Exception:
                 return None
 
-        return {
+        result = {
             "symbol":    symbol,
             "name":      info.get("shortName") or info.get("longName") or symbol,
             "currency":  currency,
@@ -2843,12 +2854,19 @@ def get_stock_info(symbol: str) -> dict:
             "employees":   info.get("fullTimeEmployees"),
             "website":     info.get("website", ""),
         }
+        _STOCK_INFO_CACHE[symbol] = (time.time(), result)
+        return result
 
     except Exception as e:
         return {"symbol": symbol, "name": symbol, "error": str(e)}
 
 def get_historical_data(symbol: str, period: str = "1y") -> Optional[pd.DataFrame]:
-    """주가 히스토리 데이터 조회"""
+    """주가 히스토리 데이터 조회 — TTL 캐시"""
+    import time
+    key = (symbol, period)
+    cached = _HIST_CACHE.get(key)
+    if cached and (time.time() - cached[0]) < _HIST_TTL:
+        return cached[1]
     try:
         ticker = yf.Ticker(symbol)
         hist   = ticker.history(period=period)
@@ -2864,6 +2882,7 @@ def get_historical_data(symbol: str, period: str = "1y") -> Optional[pd.DataFram
         if hasattr(hist.index, "tz") and hist.index.tz is not None:
             hist.index = hist.index.tz_localize(None)
 
+        _HIST_CACHE[key] = (time.time(), hist)
         return hist
     except Exception:
         return None
@@ -2872,6 +2891,10 @@ def get_historical_data(symbol: str, period: str = "1y") -> Optional[pd.DataFram
 # 최근 성공한 거시경제 데이터 캐시 (서버 재시작 전까지 유지)
 _MACRO_CACHE: dict = {}
 _MACRO_CACHE_TIME: float = 0
+# ── 조합된 전체 결과 캐시 (실제 TTL 캐시) ──────────────────
+_MACRO_RESULT_CACHE: dict = {}
+_MACRO_RESULT_TIME: float = 0
+_MACRO_TTL: float = 60       # 초. 이 시간 안에는 yfinance 재호출 없이 캐시 반환
 _MACRO_FALLBACK = {
     "KOSPI":        {"symbol": "^KS11",    "value": 2650.0,  "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
     "KOSDAQ":       {"symbol": "^KQ11",    "value": 850.0,   "change": 0,    "changePct": 0,    "grade": "C", "source": "참고용(폴백)"},
@@ -2926,10 +2949,15 @@ def _fetch_one_macro(name: str, sym: str) -> tuple[str, dict]:
 
 
 def get_macro_data() -> dict:
-    """거시경제 지표 조회 — 순차 처리 + 캐시/폴백"""
+    """거시경제 지표 조회 — TTL 캐시 + 병렬 처리 + 폴백"""
     import time
+    from concurrent.futures import ThreadPoolExecutor
 
-    global _MACRO_CACHE, _MACRO_CACHE_TIME
+    global _MACRO_CACHE, _MACRO_CACHE_TIME, _MACRO_RESULT_CACHE, _MACRO_RESULT_TIME
+
+    # ── 캐시가 신선하면 yfinance 호출 없이 즉시 반환 ──────────
+    if _MACRO_RESULT_CACHE and (time.time() - _MACRO_RESULT_TIME) < _MACRO_TTL:
+        return _MACRO_RESULT_CACHE
 
     macro_symbols = {
         "KOSPI":        "^KS11",
@@ -2943,25 +2971,33 @@ def get_macro_data() -> dict:
         "WTI 원유":     "CL=F",
     }
 
+    # ── 9개 종목 병렬 조회 (순차 → 병렬로 전체 시간 단축) ────
+    fetched: dict = {}
+    try:
+        with ThreadPoolExecutor(max_workers=len(macro_symbols)) as ex:
+            for name, data in ex.map(
+                lambda kv: _fetch_one_macro(kv[0], kv[1]),
+                macro_symbols.items(),
+            ):
+                fetched[name] = data
+    except Exception:
+        pass
+
     results = {}
-
-    for name, sym in macro_symbols.items():
-        try:
-            _, data = _fetch_one_macro(name, sym)
-            if data:
-                results[name] = data
-                _MACRO_CACHE[name] = data
-                continue
-        except Exception:
-            pass
-
-        # 실패 시 캐시 → 폴백
-        if name in _MACRO_CACHE:
+    for name in macro_symbols:
+        data = fetched.get(name)
+        if data:
+            results[name] = data
+            _MACRO_CACHE[name] = data          # 마지막 성공값 보관
+        elif name in _MACRO_CACHE:             # 실패 시 직전 성공값
             results[name] = _MACRO_CACHE[name]
-        else:
+        else:                                  # 그것도 없으면 폴백
             results[name] = _MACRO_FALLBACK[name]
 
     _MACRO_CACHE_TIME = time.time()
+    # ── 조합된 전체 결과를 캐시에 저장 ──────────────────────
+    _MACRO_RESULT_CACHE = results
+    _MACRO_RESULT_TIME  = time.time()
     return results
 
 

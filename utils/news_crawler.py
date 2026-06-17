@@ -6,6 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 import random
 import time
 import json, os, re
@@ -108,6 +109,27 @@ TRUSTED_PRESS = {
 # ── CLOVA Studio API 설정 ────────────────────────────────
 _CLOVA_API_KEY = os.environ.get("CLOVA_API_KEY", "")
 _CLOVA_API_URL = "https://clovastudio.stream.ntruss.com/testapp/v1/chat-completions/HCX-003"
+
+# ── CLOVA 429 회로 차단기 ────────────────────────────────
+# 429(요청 과다)를 맞으면 이 시각까지 CLOVA 호출을 건너뛰고 KNU 폴백 사용.
+# → 한도 초과 상태에서 계속 두들겨 맞으며 시간 낭비하는 것을 방지
+_CLOVA_COOLDOWN_UNTIL: float = 0.0
+_CLOVA_COOLDOWN_SEC:   float = 30.0
+
+# ── 종목별 뉴스 결과 캐시 (TTL) ──────────────────────────
+_NEWS_CACHE: dict = {}        # (symbol, limit) -> (timestamp, result_list)
+_NEWS_CACHE_TTL: float = 300  # 초 (5분)
+
+# ── 중복 실행 차단(single-flight) ────────────────────────
+# 프론트가 12초 타임아웃 후 같은 요청을 2~3회 재시도하는데, 그때마다
+# 무거운 크롤링이 동시에 실행되어 서버 전체를 마비시키는 것을 방지.
+_NEWS_LOCKS_GUARD = threading.Lock()
+_NEWS_INFLIGHT: dict = {}     # cache_key -> threading.Lock
+
+# ── 한 요청에서 CLOVA로 분석할 기사 수 상한 ───────────────
+# 해외 종목은 임의 언론사 URL을 크롤링해야 해서 한 건당 느림.
+# 상한을 둬서 클라이언트 타임아웃(12초) 안에 끝나도록 함.
+_MAX_ANALYZE: int = 12
 
 # ── 네이버 금융 종목 코드 맵 ──────────────────────────────
 NAVER_STOCK_CODE_MAP = {
@@ -212,6 +234,13 @@ def clova_sentiment_score(title: str, content: str = "") -> dict:
         label = "positive" if score > 0.1 else "negative" if score < -0.1 else "neutral"
         return {"score": score, "label": label, "reason": "KNU 감성사전", "grade": "C"}
 
+    global _CLOVA_COOLDOWN_UNTIL
+    # ── 회로 차단기: 최근 429를 맞았으면 CLOVA 건너뛰고 KNU 폴백 ──
+    if time.time() < _CLOVA_COOLDOWN_UNTIL:
+        score = hybrid_sentiment_score(title)
+        label = "positive" if score > 0.1 else "negative" if score < -0.1 else "neutral"
+        return {"score": score, "label": label, "reason": "KNU 감성사전(CLOVA 휴지)", "grade": "C"}
+
     # 원문 있으면 A등급, 없으면 B등급
     has_content = bool(content and len(content) > 30)
     grade_ok    = "A" if has_content else "B"
@@ -249,6 +278,9 @@ def clova_sentiment_score(title: str, content: str = "") -> dict:
         )
 
         if resp.status_code != 200:
+            # 429(요청 과다)면 회로 차단기 작동 → 한동안 CLOVA 건너뜀
+            if resp.status_code == 429:
+                _CLOVA_COOLDOWN_UNTIL = time.time() + _CLOVA_COOLDOWN_SEC
             raise Exception(f"HTTP {resp.status_code}")
 
         data         = resp.json()
@@ -322,6 +354,10 @@ def crawl_article_content(url: str) -> str:
                 "div.news_content",
                 "div.news-content",
                 "div#newsContent",
+                "div.article_cont_area",
+                "div.main_text",
+                "div#main_text",
+                "div.text_area",
                 "section.article-section",
                 "div.entry-content",
                 "article",
@@ -542,6 +578,34 @@ def _analyze_one(item: dict) -> dict:
 
 def crawl_naver_news(symbol: str, limit: int = 10) -> list[dict]:
     """
+    뉴스 수집 + 감성 분석의 공개 진입점.
+    - TTL 캐시: 신선하면 즉시 반환
+    - single-flight: 동일 요청이 처리 중이면 끝날 때까지 대기 후 캐시 반환
+      (프론트 12초 타임아웃 재시도로 같은 크롤링이 중복 실행되는 것을 차단)
+    """
+    cache_key = (symbol, limit)
+
+    cached = _NEWS_CACHE.get(cache_key)
+    if cached and (time.time() - cached[0]) < _NEWS_CACHE_TTL:
+        return cached[1]
+
+    # 이 (종목,limit) 전용 잠금 확보
+    with _NEWS_LOCKS_GUARD:
+        lock = _NEWS_INFLIGHT.setdefault(cache_key, threading.Lock())
+
+    with lock:
+        # 앞선 요청이 방금 캐시를 채웠다면 그대로 반환 (중복 크롤링 방지)
+        cached = _NEWS_CACHE.get(cache_key)
+        if cached and (time.time() - cached[0]) < _NEWS_CACHE_TTL:
+            return cached[1]
+
+        results = _crawl_naver_news_impl(symbol, limit)
+        _NEWS_CACHE[cache_key] = (time.time(), results)
+        return results
+
+
+def _crawl_naver_news_impl(symbol: str, limit: int = 10) -> list[dict]:
+    """
     1차: 네이버 금융 종목 뉴스 크롤링
     2차: 네이버 뉴스 검색 폴백 (해외 종목 포함)
     감성 분석: ThreadPoolExecutor 병렬 처리로 속도 개선
@@ -623,7 +687,7 @@ def crawl_naver_news(symbol: str, limit: int = 10) -> list[dict]:
 
     # ── 2차: 검색 폴백 (1차 실패 또는 해외 종목) ──────────
     if not raw_items:
-        raw_items = _collect_search_news(symbol, limit * 3)
+        raw_items = _collect_search_news(symbol, limit * 2)
 
     if not raw_items:
         print(f"[뉴스] {symbol} — 수집된 기사 없음")
@@ -637,9 +701,13 @@ def crawl_naver_news(symbol: str, limit: int = 10) -> list[dict]:
         max_age_days=30,
     )
 
+    # ── 분석은 반환할 만큼만 + 상한 적용 (CLOVA 호출 수 대폭 감소) ──
+    # 기존: raw_items 전부(수십 건) 분석 후 잘라서 버림 → CLOVA 과호출/429
+    raw_items = raw_items[:min(limit, _MAX_ANALYZE)]
+
     # ── 병렬 감성 분석 (ThreadPoolExecutor) ──────────────
     results = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {executor.submit(_analyze_one, item): item for item in raw_items}
         for future in as_completed(futures):
             try:
@@ -647,7 +715,7 @@ def crawl_naver_news(symbol: str, limit: int = 10) -> list[dict]:
             except Exception as e:
                 print(f"[감성분석 오류] {e}")
 
-    return results[:limit * 2]
+    return results
 
 
 def _collect_search_news(symbol: str, limit: int) -> list[dict]:
